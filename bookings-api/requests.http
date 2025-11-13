@@ -1,0 +1,88 @@
+### Variables
+@baseUrl = http://localhost:8082/api/v1
+@bookingId = 1
+
+### 1. Crear reserva pública (sin user_id)
+POST {{baseUrl}}/bookings
+Content-Type: application/json
+
+{
+  "apartment_id": 15,
+  "user_info": {
+    "first_name": "Lolo",
+    "last_name": "Gala",
+    "dni": "4321456",
+    "phone": "+5491145654432",
+    "email": "lolo@example.com"
+  },
+  "check_in": "2025-11-25",
+  "check_out": "2025-11-30",
+  "guests": 2,
+  "payment_method": "transferencia"
+}
+
+### 2. Crear reserva como admin para un usuario
+POST {{baseUrl}}/bookings
+Content-Type: application/json
+
+{
+  "apartment_id": 24,
+  "user_id": 1,
+  "user_info": {
+    "first_name": "Macarena",
+    "last_name": "Rodriguez",
+    "dni": "40456543",
+    "phone": "+5491198765238",
+    "email": "macarena@example.com"
+  },
+  "check_in": "2025-11-30",
+  "check_out": "2025-12-05",
+  "guests": 3,
+  "payment_method": "Tarjeta de crédito"
+}
+
+### 3. Obtener reserva por ID
+GET {{baseUrl}}/bookings/{{bookingId}}
+
+### 4. Obtener reservas por usuario
+GET {{baseUrl}}/bookings/user/1
+
+### 5. Actualizar reserva (cambiar fecha)
+PATCH {{baseUrl}}/bookings/{{bookingId}}
+Content-Type: application/json
+
+{
+  "check_in": "2025-11-21",
+  "check_out": "2025-11-25"
+}
+
+### 6. Cancelar reserva
+PATCH {{baseUrl}}/bookings/{{bookingId}}
+Content-Type: application/json
+
+{
+  "status": "cancelled"
+}
+
+### 7. Eliminar reserva
+DELETE {{baseUrl}}/bookings/{{bookingId}}
+
+### 8. Crear reserva que fallará por disponibilidad (fechas solapadas)
+POST {{baseUrl}}/bookings
+Content-Type: application/json
+
+{
+  "apartment_id": 2,
+  "user_info": {
+    "first_name": "Pedro",
+    "last_name": "Lopez",
+    "dni": "11223344",
+    "phone": "+5491155566677",
+    "email": "pedro@example.com"
+  },
+  "check_in": "2025-11-20",
+  "check_out": "2025-11-24",
+  "guests": 4,
+  "payment_method": "transferencia"
+}
+

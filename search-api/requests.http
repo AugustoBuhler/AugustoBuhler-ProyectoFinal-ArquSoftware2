@@ -1,0 +1,33 @@
+### Variables
+@baseUrl = http://localhost:8083/api/v1
+
+### 1. Búsqueda simple (todos los apartamentos)
+GET {{baseUrl}}/search
+
+### 2. Búsqueda por ciudad
+GET {{baseUrl}}/search?city=Buenos Aires
+
+### 3. Búsqueda por capacidad
+GET {{baseUrl}}/search?capacity=3
+
+### 4. Búsqueda por rango de precios
+GET {{baseUrl}}/search?min_price=100&max_price=130
+
+### 5. Búsqueda con múltiples filtros
+GET {{baseUrl}}/search?city=Buenos Aires&capacity=4&min_price=100&max_price=130
+
+### 6. Búsqueda con texto libre
+GET {{baseUrl}}/search?q=Quadruple
+
+### 7. Búsqueda con paginación
+GET {{baseUrl}}/search?page=1&size=5
+
+### 8. Búsqueda ordenada por precio
+GET {{baseUrl}}/search?sort_by=price&sort_order=asc
+
+### 9. Búsqueda con fechas (disponibilidad)
+GET {{baseUrl}}/search?check_in=2025-11-20&check_out=2025-11-24&capacity=4
+
+### 10. Búsqueda completa con todos los filtros
+GET {{baseUrl}}/search?q=departamento&city=Buenos Aires&capacity=4&min_price=100&max_price=130&check_in=2025-12-01&check_out=2025-12-05&page=1&size=10&sort_by=price&sort_order=asc
+

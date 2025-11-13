@@ -1,0 +1,218 @@
+# version: '3.8'  # Obsoleto en Docker Compose v2+
+
+services:
+  # Bases de datos
+  mysql:
+    image: mysql:8.0
+    container_name: mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: users_db
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mongodb:
+    image: mongo:4.4.6
+    container_name: mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: root
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "mongo --eval 'db.adminCommand(\"ping\")' --quiet --host localhost -u root -p root --authenticationDatabase admin | grep -q '\"ok\" : 1' || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # Mensajería
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: admin
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Búsqueda
+  solr:
+    image: solr:8.11
+    container_name: solr
+    ports:
+      - "8983:8983"
+    command:
+      - solr-precreate
+      - apartments
+    volumes:
+      - solr_data:/var/solr
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8983/solr/admin/info/system?wt=json || exit 1"]
+      interval: 20s
+      timeout: 15s
+      retries: 10
+      start_period: 90s
+
+  # Caché
+  memcached:
+    image: memcached:1.6.16
+    container_name: memcached
+    ports:
+      - "11211:11211"
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 1 bash -c '</dev/tcp/localhost/11211' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # Microservicios
+  users-api:
+    build:
+      context: ./users-api
+      dockerfile: Dockerfile
+    container_name: users-api
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_USER=root
+      - DB_PASSWORD=root
+      - DB_NAME=users_db
+      - JWT_SECRET=your-secret-key-change-in-production
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  apartments-api:
+    build:
+      context: ./apartments-api
+      dockerfile: Dockerfile
+    container_name: apartments-api
+    ports:
+      - "8081:8081"
+    environment:
+      - PORT=8081
+      - MONGODB_URI=mongodb://root:root@mongodb:27017/apartments_db?authSource=admin
+      - USERS_API_URL=http://users-api:8080
+      - RABBITMQ_URL=amqp://admin:admin@rabbitmq:5672/
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  bookings-api:
+    build:
+      context: ./bookings-api
+      dockerfile: Dockerfile
+    container_name: bookings-api
+    ports:
+      - "8082:8082"
+    environment:
+      - PORT=8082
+      - MONGODB_URI=mongodb://root:root@mongodb:27017/bookings_db?authSource=admin
+      - USERS_API_URL=http://users-api:8080
+      - APARTMENTS_API_URL=http://apartments-api:8081
+      - RABBITMQ_URL=amqp://admin:admin@rabbitmq:5672/
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  search-api:
+    build:
+      context: ./search-api
+      dockerfile: Dockerfile
+    container_name: search-api
+    ports:
+      - "8083:8083"
+    environment:
+      - PORT=8083
+      - SOLR_URL=http://solr:8983/solr/apartments
+      - MEMCACHED_URL=memcached:11211
+      - APARTMENTS_API_URL=http://apartments-api:8081
+      - RABBITMQ_URL=amqp://admin:admin@rabbitmq:5672/
+    depends_on:
+      solr:
+        condition: service_healthy
+      memcached:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  # Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - VITE_USERS_API_URL=http://localhost:8080
+      - VITE_APARTMENTS_API_URL=http://localhost:8081
+      - VITE_BOOKINGS_API_URL=http://localhost:8082
+      - VITE_SEARCH_API_URL=http://localhost:8083
+    depends_on:
+      - users-api
+      - apartments-api
+      - bookings-api
+      - search-api
+    networks:
+      - app-network
+    restart: unless-stopped
+
+volumes:
+  mysql_data:
+  mongo_data:
+  rabbitmq_data:
+  solr_data:
+
+networks:
+  app-network:
+    driver: bridge
+

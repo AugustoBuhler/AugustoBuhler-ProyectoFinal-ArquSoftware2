@@ -1,0 +1,47 @@
+### Variables
+@baseUrl = http://localhost:8081/api/v1
+@apartmentId = 1
+
+### 1. Crear apartamento
+POST {{baseUrl}}/apartments
+Content-Type: application/json
+
+{
+  "name": "Quadruple 1",
+  "description": "Amplio departamento para 4 personas",
+  "address": "Av. Libertador 1234",
+  "city": "Buenos Aires",
+  "max_guests": 4,
+  "bedrooms": 2,
+  "bathrooms": 1,
+  "amenities": ["WiFi", "AC", "Cocina"],
+  "price_per_night": 120.50,
+  "images": [],
+  "available": true,
+  "owner_id": 1
+}
+
+### 2. Obtener apartamento por ID
+GET {{baseUrl}}/apartments/{{apartmentId}}
+
+### 3. Obtener todos los apartamentos
+GET {{baseUrl}}/apartments
+
+### 4. Obtener apartamentos filtrados por ciudad
+GET {{baseUrl}}/apartments?city=Buenos Aires
+
+### 5. Obtener apartamentos con filtros múltiples
+GET {{baseUrl}}/apartments?city=Buenos Aires&max_guests=4&available=true&page=1&size=10
+
+### 6. Actualizar apartamento (PATCH)
+PATCH {{baseUrl}}/apartments/{{apartmentId}}
+Content-Type: application/json
+
+{
+  "price_per_night": 125.00,
+  "available": false
+}
+
+### 7. Eliminar apartamento
+DELETE {{baseUrl}}/apartments/{{apartmentId}}
+
