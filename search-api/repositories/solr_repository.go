@@ -38,18 +38,18 @@ func NewSolrRepository() SolrRepository {
 
 func (r *solrRepository) IndexApartment(apt *domain.ApartmentSearchResult) error {
 	doc := map[string]interface{}{
-		"id":             apt.ID,
-		"name":           apt.Name,
-		"description":    apt.Description,
-		"address":        apt.Address,
-		"city":           apt.City,
-		"max_guests":     apt.MaxGuests,
-		"bedrooms":       apt.Bedrooms,
-		"bathrooms":      apt.Bathrooms,
-		"amenities":      apt.Amenities,
+		"id":              apt.ID,
+		"name":            apt.Name,
+		"description":     apt.Description,
+		"address":         apt.Address,
+		"city":            apt.City,
+		"max_guests":      apt.MaxGuests,
+		"bedrooms":        apt.Bedrooms,
+		"bathrooms":       apt.Bathrooms,
+		"amenities":       apt.Amenities,
 		"price_per_night": apt.PricePerNight,
-		"images":         apt.Images,
-		"available":      apt.Available,
+		"images":          apt.Images,
+		"available":       apt.Available,
 	}
 
 	payload := map[string]interface{}{
@@ -176,7 +176,7 @@ func (r *solrRepository) Search(req domain.SearchRequest) (*domain.SearchRespons
 	// Parsear respuesta
 	var solrResponse struct {
 		Response struct {
-			NumFound int64 `json:"numFound"`
+			NumFound int64                    `json:"numFound"`
 			Docs     []map[string]interface{} `json:"docs"`
 		} `json:"response"`
 	}
@@ -191,72 +191,83 @@ func (r *solrRepository) Search(req domain.SearchRequest) (*domain.SearchRespons
 		apt := &domain.ApartmentSearchResult{}
 
 		// Helper para obtener valor (puede ser array o valor simple)
-		getValue := func(key string) interface{} {
+		getString := func(key string) string {
 			if val, ok := doc[key]; ok {
 				if arr, ok := val.([]interface{}); ok && len(arr) > 0 {
-					return arr[0]
+					if str, ok := arr[0].(string); ok {
+						return str
+					}
 				}
-				return val
+				if str, ok := val.(string); ok {
+					return str
+				}
 			}
-			return nil
+			return ""
 		}
 
-		if id := getValue("id"); id != nil {
-			// Solr puede devolver ID como string o número
-			switch v := id.(type) {
-			case float64:
-				apt.ID = int64(v)
-			case string:
-				if idInt, err := strconv.ParseInt(v, 10, 64); err == nil {
-					apt.ID = idInt
+		getInt := func(key string) int {
+			if val, ok := doc[key]; ok {
+				if arr, ok := val.([]interface{}); ok && len(arr) > 0 {
+					if num, ok := arr[0].(float64); ok {
+						return int(num)
+					}
+				}
+				if num, ok := val.(float64); ok {
+					return int(num)
 				}
 			}
+			return 0
 		}
-		if name := getValue("name"); name != nil {
-			if nameStr, ok := name.(string); ok {
-				apt.Name = nameStr
+
+		getFloat := func(key string) float64 {
+			if val, ok := doc[key]; ok {
+				if arr, ok := val.([]interface{}); ok && len(arr) > 0 {
+					if num, ok := arr[0].(float64); ok {
+						return num
+					}
+				}
+				if num, ok := val.(float64); ok {
+					return num
+				}
 			}
+			return 0
 		}
-		if desc := getValue("description"); desc != nil {
-			if descStr, ok := desc.(string); ok {
-				apt.Description = descStr
+
+		getBool := func(key string) bool {
+			if val, ok := doc[key]; ok {
+				if arr, ok := val.([]interface{}); ok && len(arr) > 0 {
+					if b, ok := arr[0].(bool); ok {
+						return b
+					}
+				}
+				if b, ok := val.(bool); ok {
+					return b
+				}
 			}
+			return false
 		}
-		if addr := getValue("address"); addr != nil {
-			if addrStr, ok := addr.(string); ok {
-				apt.Address = addrStr
+
+		// Parsear ID (puede ser string o número)
+		idStr := getString("id")
+		if idStr != "" {
+			if idInt, err := strconv.ParseInt(idStr, 10, 64); err == nil {
+				apt.ID = idInt
 			}
+		} else {
+			apt.ID = int64(getInt("id"))
 		}
-		if city := getValue("city"); city != nil {
-			if cityStr, ok := city.(string); ok {
-				apt.City = cityStr
-			}
-		}
-		if guests := getValue("max_guests"); guests != nil {
-			if guestsFloat, ok := guests.(float64); ok {
-				apt.MaxGuests = int(guestsFloat)
-			}
-		}
-		if bedrooms := getValue("bedrooms"); bedrooms != nil {
-			if bedroomsFloat, ok := bedrooms.(float64); ok {
-				apt.Bedrooms = int(bedroomsFloat)
-			}
-		}
-		if bathrooms := getValue("bathrooms"); bathrooms != nil {
-			if bathroomsFloat, ok := bathrooms.(float64); ok {
-				apt.Bathrooms = int(bathroomsFloat)
-			}
-		}
-		if price := getValue("price_per_night"); price != nil {
-			if priceFloat, ok := price.(float64); ok {
-				apt.PricePerNight = priceFloat
-			}
-		}
-		if available := getValue("available"); available != nil {
-			if availableBool, ok := available.(bool); ok {
-				apt.Available = availableBool
-			}
-		}
+
+		apt.Name = getString("name")
+		apt.Description = getString("description")
+		apt.Address = getString("address")
+		apt.City = getString("city")
+		apt.MaxGuests = getInt("max_guests")
+		apt.Bedrooms = getInt("bedrooms")
+		apt.Bathrooms = getInt("bathrooms")
+		apt.PricePerNight = getFloat("price_per_night")
+		apt.Available = getBool("available")
+
+		// Parsear arrays
 		if amenities, ok := doc["amenities"].([]interface{}); ok {
 			apt.Amenities = make([]string, 0, len(amenities))
 			for _, a := range amenities {
@@ -290,4 +301,3 @@ func (r *solrRepository) Search(req domain.SearchRequest) (*domain.SearchRespons
 		TotalPages: totalPages,
 	}, nil
 }
-

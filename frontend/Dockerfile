@@ -1,19 +1,18 @@
-FROM node:18-alpine AS builder
+FROM node:18-alpine
 
 WORKDIR /app
 
-COPY package.json ./
+# Copiar archivos de dependencias
+COPY package*.json ./
+
+# Instalar dependencias
 RUN npm install
 
+# Copiar código fuente
 COPY . .
 
-RUN npm run build
-
-FROM nginx:alpine
-
-COPY --from=builder /app/dist /usr/share/nginx/html
-
+# Exponer puerto
 EXPOSE 3000
 
-CMD ["nginx", "-g", "daemon off;"]
-
+# Comando para desarrollo (con hot reload)
+CMD ["npm", "run", "dev", "--", "--host"]

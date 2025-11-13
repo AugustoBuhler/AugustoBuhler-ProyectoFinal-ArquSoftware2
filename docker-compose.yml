@@ -193,10 +193,9 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - VITE_USERS_API_URL=http://localhost:8080
-      - VITE_APARTMENTS_API_URL=http://localhost:8081
-      - VITE_BOOKINGS_API_URL=http://localhost:8082
-      - VITE_SEARCH_API_URL=http://localhost:8083
+      - VITE_API_BASE_URL=http://search-api:8083
+      - VITE_APARTMENTS_API_URL=http://apartments-api:8081
+      - VITE_BOOKINGS_API_URL=http://bookings-api:8082
     depends_on:
       - users-api
       - apartments-api
