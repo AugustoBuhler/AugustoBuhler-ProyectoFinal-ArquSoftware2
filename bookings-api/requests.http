@@ -1,22 +1,42 @@
 ### Variables
 @baseUrl = http://localhost:8082/api/v1
-@bookingId = 1
+@bookingId = 27
+@apartmentsApiUrl = http://localhost:8081/api/v1
 
-### 1. Crear reserva pública (sin user_id)
+### 1. Crear reserva pública (sin user_id) - Usando apartment_id específico
 POST {{baseUrl}}/bookings
 Content-Type: application/json
 
 {
-  "apartment_id": 15,
+  "apartment_id": 16,
   "user_info": {
-    "first_name": "Lolo",
-    "last_name": "Gala",
-    "dni": "4321456",
-    "phone": "+5491145654432",
-    "email": "lolo@example.com"
+    "first_name": "Laura",
+    "last_name": "Esteven",
+    "dni": "36763321",
+    "phone": "+5491156321456",
+    "email": "laura.esteven@example.com"
   },
-  "check_in": "2025-11-25",
-  "check_out": "2025-11-30",
+  "check_in": "2026-01-11",
+  "check_out": "2026-01-15",
+  "guests": 2,
+  "payment_method": "transferencia"
+}
+
+### 1b. Crear reserva pública - Usando apartment_type (asignación automática)
+POST {{baseUrl}}/bookings
+Content-Type: application/json
+
+{
+  "apartment_type": "double_matrimonial",
+  "user_info": {
+    "first_name": "Valeria",
+    "last_name": "Ulises",
+    "dni": "23677332",
+    "phone": "+5491179234299",
+    "email": "valeria.ulises@example.com"
+  },
+  "check_in": "2026-01-28",
+  "check_out": "2026-01-29",
   "guests": 2,
   "payment_method": "transferencia"
 }
@@ -26,28 +46,34 @@ POST {{baseUrl}}/bookings
 Content-Type: application/json
 
 {
-  "apartment_id": 24,
+  "apartment_id": 17,
   "user_id": 1,
   "user_info": {
-    "first_name": "Macarena",
-    "last_name": "Rodriguez",
-    "dni": "40456543",
-    "phone": "+5491198765238",
-    "email": "macarena@example.com"
+    "first_name": "Angie",
+    "last_name": "Yunes",
+    "dni": "46987432",
+    "phone": "+5491198765110",
+    "email": "angie.yunes@example.com"
   },
-  "check_in": "2025-11-30",
-  "check_out": "2025-12-05",
-  "guests": 3,
-  "payment_method": "Tarjeta de crédito"
+  "check_in": "2026-01-05",
+  "check_out": "2026-01-10",
+  "guests": 2,
+  "payment_method": "transferencia"
 }
 
-### 3. Obtener reserva por ID
+### 3. Obtener todas las reservas (para admin) - NUEVO
+GET {{baseUrl}}/bookings?size=100
+
+### 3a. Obtener todas las reservas con filtros
+# GET {{baseUrl}}/bookings?apartment_id=15&status=confirmed&size=50
+
+### 4. Obtener reserva por ID
 GET {{baseUrl}}/bookings/{{bookingId}}
 
-### 4. Obtener reservas por usuario
+### 5. Obtener reservas por usuario
 GET {{baseUrl}}/bookings/user/1
 
-### 5. Actualizar reserva (cambiar fecha)
+### 6. Actualizar reserva (cambiar fecha)
 PATCH {{baseUrl}}/bookings/{{bookingId}}
 Content-Type: application/json
 
@@ -56,7 +82,7 @@ Content-Type: application/json
   "check_out": "2025-11-25"
 }
 
-### 6. Cancelar reserva
+### 7. Cancelar reserva
 PATCH {{baseUrl}}/bookings/{{bookingId}}
 Content-Type: application/json
 
@@ -64,15 +90,15 @@ Content-Type: application/json
   "status": "cancelled"
 }
 
-### 7. Eliminar reserva
+### 8. Eliminar reserva
 DELETE {{baseUrl}}/bookings/{{bookingId}}
 
-### 8. Crear reserva que fallará por disponibilidad (fechas solapadas)
+### 9. Crear reserva que fallará por disponibilidad (fechas solapadas)
 POST {{baseUrl}}/bookings
 Content-Type: application/json
 
 {
-  "apartment_id": 2,
+  "apartment_type": "quadruple",
   "user_info": {
     "first_name": "Pedro",
     "last_name": "Lopez",
@@ -86,3 +112,65 @@ Content-Type: application/json
   "payment_method": "transferencia"
 }
 
+### 10. Crear reserva pública con tipo Triple
+POST {{baseUrl}}/bookings
+Content-Type: application/json
+
+{
+  "apartment_type": "triple",
+  "user_info": {
+    "first_name": "Maria",
+    "last_name": "Garcia",
+    "dni": "22334455",
+    "phone": "+5491122334455",
+    "email": "maria@example.com"
+  },
+  "check_in": "2025-12-10",
+  "check_out": "2025-12-15",
+  "guests": 3,
+  "payment_method": "efectivo"
+}
+
+### 11. Crear reserva pública con tipo Quadruple
+POST {{baseUrl}}/bookings
+Content-Type: application/json
+
+{
+  "apartment_type": "quadruple",
+  "user_info": {
+    "first_name": "Carlos",
+    "last_name": "Martinez",
+    "dni": "33445566",
+    "phone": "+5491133445566",
+    "email": "carlos@example.com"
+  },
+  "check_in": "2025-12-20",
+  "check_out": "2025-12-25",
+  "guests": 4,
+  "payment_method": "transferencia"
+}
+
+### ============================================
+### PRUEBAS DE FUNCIONALIDADES INTERNAS
+### ============================================
+
+### 12. Verificar reservas de un apartamento específico (simula CheckAvailability)
+# Obtiene todas las reservas de un apartamento para verificar disponibilidad manualmente
+GET {{baseUrl}}/bookings?apartment_id=9&size=100
+
+### 13. Obtener todos los apartamentos (simula GetAllApartmentsByType desde apartments-api)
+# GetAllApartmentsByType es un método interno, pero puedes obtener todos los apartamentos
+# y filtrar por tipo "Double Matrimonial", "Triple", "Quadruple", etc. en la respuesta
+GET {{apartmentsApiUrl}}/apartments?size=1000
+
+### 14. Verificar apartamento disponible por tipo y fechas (vía apartments-api)
+# Este endpoint busca un apartamento disponible del tipo especificado para las fechas
+GET {{apartmentsApiUrl}}/apartments/available-by-type?type=double_matrimonial&check_in=2026-01-28&check_out=2026-01-29
+
+### 15. Obtener todos los tipos de apartamentos agregados (vía apartments-api)
+# Retorna tipos agregados con conteos, precios, etc.
+GET {{apartmentsApiUrl}}/apartment-types
+
+### 16. Filtrar apartamentos por tipo manualmente (ejemplo Double Matrimonial)
+# Buscar en la respuesta los que contengan "Double Matrimonial" en el nombre
+GET {{apartmentsApiUrl}}/apartments?size=1000

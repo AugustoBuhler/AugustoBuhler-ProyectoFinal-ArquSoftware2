@@ -63,14 +63,13 @@ export const deleteApartment = async (id) => {
 
 // Reservas
 export const getAllBookings = async () => {
-  // Obtener todas las reservas (usando el endpoint de usuario con admin user_id)
-  // En el futuro, se puede crear un endpoint GET /bookings sin user_id para admin
+  // Obtener TODAS las reservas (públicas y con user_id) - para admin
   try {
-    const response = await bookingsAPI.get('/bookings/user/1')
+    const response = await bookingsAPI.get('/bookings?size=1000')
     return response.data
   } catch (error) {
     console.error('Error fetching bookings:', error)
-    // Si falla, intentar obtener de forma diferente o retornar array vacío
+    // Si falla, retornar array vacío
     return { data: [], total: 0 }
   }
 }

@@ -1,6 +1,6 @@
 ### Variables
 @baseUrl = http://localhost:8081/api/v1
-@apartmentId = 1
+@apartmentId = 25
 
 ### 1. Crear apartamento
 POST {{baseUrl}}/apartments
@@ -44,4 +44,14 @@ Content-Type: application/json
 
 ### 7. Eliminar apartamento
 DELETE {{baseUrl}}/apartments/{{apartmentId}}
+
+### 8. Obtener todos los apartamentos de un tipo específico (simula GetAllApartmentsByType)
+# Este endpoint obtiene todos los apartamentos, luego filtrar por tipo en la respuesta
+GET {{baseUrl}}/apartments?size=1000
+
+### 9. Verificar disponibilidad de un apartamento por tipo y fechas
+GET {{baseUrl}}/apartments/available-by-type?type=double_matrimonial&check_in=2026-01-28&check_out=2026-01-29
+
+### 10. Obtener todos los tipos de apartamentos agregados
+GET {{baseUrl}}/apartment-types
 

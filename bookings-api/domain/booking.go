@@ -32,8 +32,9 @@ type Booking struct {
 }
 
 type CreateBookingRequest struct {
-	ApartmentID   int64     `json:"apartment_id" binding:"required"`
-	UserID        *int64    `json:"user_id,omitempty"` // Opcional: si es admin creando para un usuario
+	ApartmentID   *int64    `json:"apartment_id,omitempty"`   // Opcional: ID específico (para admin)
+	ApartmentType string    `json:"apartment_type,omitempty"` // Opcional: Tipo de apartamento (para reservas públicas)
+	UserID        *int64    `json:"user_id,omitempty"`        // Opcional: si es admin creando para un usuario
 	GuestInfo     GuestInfo `json:"user_info" binding:"required"`
 	CheckIn       string    `json:"check_in" binding:"required"`       // Formato: "2025-11-10"
 	CheckOut      string    `json:"check_out" binding:"required"`      // Formato: "2025-11-14"

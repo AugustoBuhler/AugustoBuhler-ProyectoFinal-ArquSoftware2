@@ -3,8 +3,9 @@ package services
 import (
 	"context"
 	"errors"
-	"fmt"
+	"time"
 
+	"apartments-api/clients"
 	"apartments-api/domain"
 	"apartments-api/repositories"
 )
@@ -15,22 +16,20 @@ type ApartmentService interface {
 	GetAllApartments(ctx context.Context, filters map[string]interface{}, page, size int) ([]*domain.Apartment, int64, error)
 	UpdateApartment(ctx context.Context, id int64, req domain.UpdateApartmentRequest) (*domain.Apartment, error)
 	DeleteApartment(ctx context.Context, id int64) error
+	GetApartmentTypes(ctx context.Context) ([]*domain.ApartmentType, error)
+	GetAvailableApartmentByType(ctx context.Context, aptType string, checkIn, checkOut time.Time) (*domain.Apartment, error)
 }
 
 type apartmentService struct {
-	aptRepo    repositories.ApartmentRepository
+	aptRepo     repositories.ApartmentRepository
 	usersClient repositories.UsersClient
-	rmqClient  RabbitMQClient
-}
-
-type RabbitMQClient interface {
-	PublishApartmentEvent(action string, apartmentID int64) error
+	rmqClient   clients.RabbitMQClient
 }
 
 func NewApartmentService(
 	aptRepo repositories.ApartmentRepository,
 	usersClient repositories.UsersClient,
-	rmqClient RabbitMQClient,
+	rmqClient clients.RabbitMQClient,
 ) ApartmentService {
 	return &apartmentService{
 		aptRepo:     aptRepo,
@@ -40,16 +39,12 @@ func NewApartmentService(
 }
 
 func (s *apartmentService) CreateApartment(ctx context.Context, req domain.CreateApartmentRequest) (*domain.Apartment, error) {
-	// Validar que el owner existe
-	exists, err := s.usersClient.GetUserByID(req.OwnerID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to validate owner: %w", err)
-	}
-	if !exists {
+	// Validar owner
+	ownerExists, err := s.usersClient.GetUserByID(req.OwnerID)
+	if err != nil || !ownerExists {
 		return nil, errors.New("owner not found")
 	}
 
-	// Crear apartamento
 	apartment := &domain.Apartment{
 		Name:          req.Name,
 		Description:   req.Description,
@@ -63,22 +58,18 @@ func (s *apartmentService) CreateApartment(ctx context.Context, req domain.Creat
 		Images:        req.Images,
 		Available:     req.Available,
 		OwnerID:       req.OwnerID,
-	}
-
-	if apartment.Available == false && len(req.Amenities) == 0 {
-		apartment.Available = true // Por defecto disponible
+		CreatedAt:     time.Now(),
+		UpdatedAt:     time.Now(),
 	}
 
 	err = s.aptRepo.Create(ctx, apartment)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create apartment: %w", err)
+		return nil, err
 	}
 
 	// Publicar evento a RabbitMQ
 	if err := s.rmqClient.PublishApartmentEvent("created", apartment.ID); err != nil {
 		// Log error pero no fallar la creación
-		// En producción, considerar reintentos o cola de dead letter
-		// Por ahora solo loguear
 	}
 
 	return apartment, nil
@@ -107,69 +98,70 @@ func (s *apartmentService) GetAllApartments(ctx context.Context, filters map[str
 		return nil, 0, err
 	}
 
-	// Para simplificar, retornamos el count actual (en producción hacer count total)
-	total := int64(len(apartments))
+	total, err := s.aptRepo.Count(ctx, filters)
+	if err != nil {
+		return nil, 0, err
+	}
 
 	return apartments, total, nil
 }
 
 func (s *apartmentService) UpdateApartment(ctx context.Context, id int64, req domain.UpdateApartmentRequest) (*domain.Apartment, error) {
-	// Obtener apartamento existente
-	apartment, err := s.aptRepo.GetByID(ctx, id)
+	existing, err := s.aptRepo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 
-	// Actualizar campos si se proporcionan
 	if req.Name != nil {
-		apartment.Name = *req.Name
+		existing.Name = *req.Name
 	}
 	if req.Description != nil {
-		apartment.Description = *req.Description
+		existing.Description = *req.Description
 	}
 	if req.Address != nil {
-		apartment.Address = *req.Address
+		existing.Address = *req.Address
 	}
 	if req.City != nil {
-		apartment.City = *req.City
+		existing.City = *req.City
 	}
 	if req.MaxGuests != nil {
-		apartment.MaxGuests = *req.MaxGuests
+		existing.MaxGuests = *req.MaxGuests
 	}
 	if req.Bedrooms != nil {
-		apartment.Bedrooms = *req.Bedrooms
+		existing.Bedrooms = *req.Bedrooms
 	}
 	if req.Bathrooms != nil {
-		apartment.Bathrooms = *req.Bathrooms
+		existing.Bathrooms = *req.Bathrooms
 	}
 	if req.Amenities != nil {
-		apartment.Amenities = *req.Amenities
+		existing.Amenities = *req.Amenities
 	}
 	if req.PricePerNight != nil {
-		apartment.PricePerNight = *req.PricePerNight
+		existing.PricePerNight = *req.PricePerNight
 	}
 	if req.Images != nil {
-		apartment.Images = *req.Images
+		existing.Images = *req.Images
 	}
 	if req.Available != nil {
-		apartment.Available = *req.Available
+		existing.Available = *req.Available
 	}
+	existing.UpdatedAt = time.Now()
 
-	err = s.aptRepo.Update(ctx, id, apartment)
+	err = s.aptRepo.Update(ctx, id, existing)
 	if err != nil {
 		return nil, err
 	}
 
 	// Publicar evento a RabbitMQ
-	if err := s.rmqClient.PublishApartmentEvent("updated", apartment.ID); err != nil {
+	if err := s.rmqClient.PublishApartmentEvent("updated", existing.ID); err != nil {
 		// Log error pero no fallar la actualización
 	}
 
-	return apartment, nil
+	return existing, nil
 }
 
 func (s *apartmentService) DeleteApartment(ctx context.Context, id int64) error {
-	// Verificar que existe
+	// Verificar que exista
 	_, err := s.aptRepo.GetByID(ctx, id)
 	if err != nil {
 		return err
@@ -188,3 +180,84 @@ func (s *apartmentService) DeleteApartment(ctx context.Context, id int64) error 
 	return nil
 }
 
+// GetApartmentTypes obtiene todos los tipos de apartamentos agrupados
+func (s *apartmentService) GetApartmentTypes(ctx context.Context) ([]*domain.ApartmentType, error) {
+	// Obtener todos los apartamentos
+	allApartments, err := s.aptRepo.GetAll(ctx, map[string]interface{}{}, 0, 1000)
+	if err != nil {
+		return nil, err
+	}
+
+	// Agrupar por tipo
+	typeMap := make(map[string]*domain.ApartmentType)
+	
+	for _, apt := range allApartments {
+		aptType := domain.GetApartmentType(apt.Name)
+		if aptType == "unknown" {
+			continue
+		}
+
+		if typeMap[aptType] == nil {
+			typeMap[aptType] = &domain.ApartmentType{
+				Type:        aptType,
+				Name:        domain.GetTypeDisplayName(aptType),
+				Description: domain.GetTypeDescription(aptType),
+				MaxGuests:   apt.MaxGuests,
+				Count:       0,
+				MinPrice:    apt.PricePerNight,
+				MaxPrice:    apt.PricePerNight,
+				Available:   apt.Available,
+			}
+		}
+
+		typeMap[aptType].Count++
+		if apt.PricePerNight < typeMap[aptType].MinPrice {
+			typeMap[aptType].MinPrice = apt.PricePerNight
+		}
+		if apt.PricePerNight > typeMap[aptType].MaxPrice {
+			typeMap[aptType].MaxPrice = apt.PricePerNight
+		}
+		if apt.Available {
+			typeMap[aptType].Available = true
+		}
+	}
+
+	// Convertir a slice y ordenar
+	types := make([]*domain.ApartmentType, 0, len(typeMap))
+	order := []string{"quadruple", "triple", "double_matrimonial", "double_twin"}
+	
+	for _, t := range order {
+		if typeMap[t] != nil {
+			types = append(types, typeMap[t])
+		}
+	}
+	
+	return types, nil
+}
+
+// GetAvailableApartmentByType busca un apartamento disponible del tipo especificado en el rango de fechas
+func (s *apartmentService) GetAvailableApartmentByType(ctx context.Context, aptType string, checkIn, checkOut time.Time) (*domain.Apartment, error) {
+	// Obtener todos los apartamentos del tipo
+	allApartments, err := s.aptRepo.GetAll(ctx, map[string]interface{}{}, 0, 1000)
+	if err != nil {
+		return nil, err
+	}
+
+	// Filtrar por tipo
+	var typeApartments []*domain.Apartment
+	for _, apt := range allApartments {
+		if domain.GetApartmentType(apt.Name) == aptType && apt.Available {
+			typeApartments = append(typeApartments, apt)
+		}
+	}
+
+	if len(typeApartments) == 0 {
+		return nil, errors.New("no apartments of this type available")
+	}
+
+	// Por ahora, retornamos el primero disponible
+	// La verificación de disponibilidad real (checking bookings) se hace en bookings-api
+	// cuando se intenta crear la reserva
+	
+	return typeApartments[0], nil
+}

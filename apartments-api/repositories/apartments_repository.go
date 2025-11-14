@@ -19,6 +19,7 @@ type ApartmentRepository interface {
 	Update(ctx context.Context, id int64, apartment *domain.Apartment) error
 	Delete(ctx context.Context, id int64) error
 	GetNextID(ctx context.Context) (int64, error)
+	Count(ctx context.Context, filters map[string]interface{}) (int64, error)
 }
 
 type apartmentRepository struct {
@@ -127,5 +128,23 @@ func (r *apartmentRepository) Delete(ctx context.Context, id int64) error {
 		return errors.New("apartment not found")
 	}
 	return nil
+}
+
+func (r *apartmentRepository) Count(ctx context.Context, filters map[string]interface{}) (int64, error) {
+	filter := bson.M{}
+	
+	// Aplicar filtros
+	if city, ok := filters["city"]; ok {
+		filter["city"] = city
+	}
+	if available, ok := filters["available"]; ok {
+		filter["available"] = available
+	}
+	if maxGuests, ok := filters["max_guests"]; ok {
+		filter["max_guests"] = bson.M{"$gte": maxGuests}
+	}
+
+	count, err := r.collection.CountDocuments(ctx, filter)
+	return count, err
 }
 

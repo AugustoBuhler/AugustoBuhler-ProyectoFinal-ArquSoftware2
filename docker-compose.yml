@@ -192,6 +192,16 @@ services:
     container_name: frontend
     ports:
       - "3000:3000"
+    volumes:
+      # Montar código fuente para desarrollo con hot reload
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+      - ./frontend/index.html:/app/index.html
+      - ./frontend/vite.config.js:/app/vite.config.js
+      - ./frontend/tailwind.config.js:/app/tailwind.config.js
+      - ./frontend/postcss.config.js:/app/postcss.config.js
+      # Excluir node_modules del volumen para evitar conflictos
+      - /app/node_modules
     environment:
       - VITE_API_BASE_URL=http://search-api:8083
       - VITE_APARTMENTS_API_URL=http://apartments-api:8081

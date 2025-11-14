@@ -29,6 +29,7 @@ function App() {
               <Routes>
                 <Route path="/" element={<HomePage />} />
                 <Route path="/apartment/:id" element={<ApartmentDetailPage />} />
+                <Route path="/booking" element={<BookingPage />} />
                 <Route path="/booking/:id" element={<BookingPage />} />
                 <Route path="/confirmation/:bookingId" element={<ConfirmationPage />} />
               </Routes>

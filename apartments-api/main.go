@@ -87,6 +87,8 @@ func main() {
 		api.GET("/apartments", aptController.GetAllApartments)
 		api.PATCH("/apartments/:id", aptController.UpdateApartment)
 		api.DELETE("/apartments/:id", aptController.DeleteApartment)
+		api.GET("/apartment-types", aptController.GetApartmentTypes)
+		api.GET("/apartments/available-by-type", aptController.GetAvailableApartmentByType)
 	}
 
 	port := os.Getenv("PORT")

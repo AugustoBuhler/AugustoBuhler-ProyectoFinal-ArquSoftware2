@@ -27,13 +27,16 @@ func (c *BookingController) CreateBooking(ctx *gin.Context) {
 		return
 	}
 
-	// Obtener información del usuario desde JWT (si está presente)
-	// Por ahora, si viene user_id en el request, es un admin creando para un usuario
-	// Si no viene user_id, es una reserva pública (sin login)
+	// Determinar si es admin o reserva pública
+	// IMPORTANTE: user_id en el request es OPCIONAL
+	// - Si NO viene user_id: es una reserva pública (sin login) - OK
+	// - Si viene user_id: admin está creando reserva para un usuario específico (requiere que el usuario exista)
 	isAdmin := false
 	var adminUserID *int64
-	// TODO: Extraer de JWT si está disponible
-	// Por ahora, si viene user_id en el request, asumimos que es admin
+	
+	// TODO: Extraer admin del JWT cuando implementemos autenticación
+	// Por ahora, si viene user_id en el request, asumimos que es un admin creando para ese usuario
+	// El user_id debe existir en la base de datos (se valida en el servicio)
 	if req.UserID != nil {
 		isAdmin = true
 		adminUserID = req.UserID
@@ -93,6 +96,56 @@ func (c *BookingController) GetBookingsByUserID(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, gin.H{
 		"data":  bookings,
 		"total": len(bookings),
+	})
+}
+
+// GetAllBookings retorna todas las reservas (para admin)
+func (c *BookingController) GetAllBookings(ctx *gin.Context) {
+	// Filtros opcionales
+	filters := make(map[string]interface{})
+	
+	if apartmentID := ctx.Query("apartment_id"); apartmentID != "" {
+		id, err := strconv.ParseInt(apartmentID, 10, 64)
+		if err == nil {
+			filters["apartment_id"] = id
+		}
+	}
+	if status := ctx.Query("status"); status != "" {
+		filters["status"] = status
+	}
+	if userID := ctx.Query("user_id"); userID != "" {
+		id, err := strconv.ParseInt(userID, 10, 64)
+		if err == nil {
+			filters["user_id"] = id
+		}
+	}
+
+	// Paginación
+	page := 1
+	size := 100
+	if p := ctx.Query("page"); p != "" {
+		if parsed, err := strconv.Atoi(p); err == nil && parsed > 0 {
+			page = parsed
+		}
+	}
+	if s := ctx.Query("size"); s != "" {
+		if parsed, err := strconv.Atoi(s); err == nil && parsed > 0 && parsed <= 100 {
+			size = parsed
+		}
+	}
+
+	bookings, total, err := c.bookingService.GetAllBookings(ctx.Request.Context(), filters, page, size)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"data":       bookings,
+		"total":      total,
+		"page":       page,
+		"size":       size,
+		"total_pages": (int(total) + size - 1) / size,
 	})
 }
 

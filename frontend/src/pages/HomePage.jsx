@@ -1,59 +1,32 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { searchApartments } from '../services/api'
-import SearchFilters from '../components/SearchFilters'
-import ApartmentCard from '../components/ApartmentCard'
+import { getApartmentTypes } from '../services/apartmentTypes'
+import ApartmentTypeCard from '../components/ApartmentTypeCard'
 
 const HomePage = () => {
-  const [apartments, setApartments] = useState([])
+  const [types, setTypes] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [pagination, setPagination] = useState({
-    page: 1,
-    size: 12,
-    total: 0,
-    totalPages: 0,
-  })
 
-  const loadApartments = async (filters = {}) => {
+  useEffect(() => {
+    loadApartmentTypes()
+  }, [])
+
+  const loadApartmentTypes = async () => {
     setLoading(true)
     setError(null)
     try {
-      const params = {
-        ...filters,
-        page: pagination.page,
-        size: pagination.size,
-      }
-      const response = await searchApartments(params)
-      setApartments(response.data || [])
-      setPagination({
-        page: response.page || 1,
-        size: response.size || 12,
-        total: response.total || 0,
-        totalPages: response.total_pages || 0,
-      })
+      console.log('Loading apartment types...')
+      const data = await getApartmentTypes()
+      console.log('Apartment types loaded:', data)
+      setTypes(data || [])
     } catch (err) {
-      console.error('Error loading apartments:', err)
-      setError('Error al cargar apartamentos. Verifica que Search-API esté corriendo.')
-      setApartments([])
+      console.error('Error loading apartment types:', err)
+      setError(`Error al cargar tipos de apartamentos: ${err.message || 'Verifica que Apartments-API esté corriendo en http://localhost:8081'}`)
+      setTypes([])
     } finally {
       setLoading(false)
     }
-  }
-
-  useEffect(() => {
-    loadApartments()
-  }, [])
-
-  const handleSearch = (filters) => {
-    setPagination({ ...pagination, page: 1 })
-    loadApartments(filters)
-  }
-
-  const handlePageChange = (newPage) => {
-    setPagination({ ...pagination, page: newPage })
-    const currentFilters = {}
-    loadApartments(currentFilters)
   }
 
   return (
@@ -65,14 +38,12 @@ const HomePage = () => {
         className="text-center mb-12"
       >
         <h1 className="text-4xl md:text-5xl font-bold text-gray-800 mb-4">
-          Encuentra tu Apartamento Ideal
+          Elige tu Tipo de Habitación
         </h1>
         <p className="text-xl text-gray-600">
-          Descubre alojamientos temporales perfectos para tu estancia
+          Selecciona el tipo de habitación que mejor se adapte a tus necesidades
         </p>
       </motion.div>
-
-      <SearchFilters onSearch={handleSearch} loading={loading} />
 
       {error && (
         <motion.div
@@ -80,7 +51,14 @@ const HomePage = () => {
           animate={{ opacity: 1 }}
           className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6"
         >
-          {error}
+          <p className="font-semibold">Error</p>
+          <p>{error}</p>
+          <button
+            onClick={loadApartmentTypes}
+            className="mt-2 text-red-700 underline"
+          >
+            Reintentar
+          </button>
         </motion.div>
       )}
 
@@ -91,56 +69,29 @@ const HomePage = () => {
             transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
             className="w-16 h-16 border-4 border-primary-600 border-t-transparent rounded-full"
           />
+          <p className="ml-4 text-gray-600">Cargando tipos de apartamentos...</p>
         </div>
-      ) : apartments.length === 0 ? (
+      ) : types.length === 0 ? (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           className="text-center py-20"
         >
-          <p className="text-xl text-gray-600 mb-4">No se encontraron apartamentos</p>
-          <p className="text-gray-500">Intenta ajustar los filtros de búsqueda</p>
+          <p className="text-xl text-gray-600 mb-4">No hay tipos de apartamentos disponibles</p>
+          <p className="text-gray-500 mb-4">Verifica que Apartments-API esté corriendo y tenga apartamentos</p>
+          <button
+            onClick={loadApartmentTypes}
+            className="btn-primary"
+          >
+            Reintentar
+          </button>
         </motion.div>
       ) : (
-        <>
-          <div className="mb-6">
-            <p className="text-gray-600">
-              Mostrando {apartments.length} de {pagination.total} apartamentos
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-            {apartments.map((apartment, index) => (
-              <ApartmentCard key={apartment.id} apartment={apartment} index={index} />
-            ))}
-          </div>
-
-          {pagination.totalPages > 1 && (
-            <div className="flex justify-center items-center space-x-2">
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => handlePageChange(pagination.page - 1)}
-                disabled={pagination.page === 1}
-                className="px-4 py-2 bg-white border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Anterior
-              </motion.button>
-              <span className="px-4 py-2 text-gray-700">
-                Página {pagination.page} de {pagination.totalPages}
-              </span>
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => handlePageChange(pagination.page + 1)}
-                disabled={pagination.page >= pagination.totalPages}
-                className="px-4 py-2 bg-white border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Siguiente
-              </motion.button>
-            </div>
-          )}
-        </>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {types.map((type, index) => (
+            <ApartmentTypeCard key={type.type} type={type} index={index} />
+          ))}
+        </div>
       )}
     </div>
   )

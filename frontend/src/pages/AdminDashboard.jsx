@@ -76,10 +76,54 @@ const AdminDashboard = () => {
     }
   }
 
+  // Función helper para obtener el tipo de apartamento desde el nombre
+  const getApartmentType = (name) => {
+    if (!name) return 'unknown'
+    if (name.startsWith('Quadruple')) return 'quadruple'
+    if (name.startsWith('Double Matrimonial')) return 'double_matrimonial'
+    if (name.startsWith('Double Twin')) return 'double_twin'
+    if (name.startsWith('Triple')) return 'triple'
+    return 'unknown'
+  }
+
+  // Función helper para obtener el nombre para mostrar del tipo
+  const getTypeDisplayName = (type) => {
+    switch (type) {
+      case 'quadruple': return 'Habitación Cuádruple'
+      case 'double_matrimonial': return 'Habitación Double Matrimonial'
+      case 'double_twin': return 'Habitación Double Twin'
+      case 'triple': return 'Habitación Triple'
+      default: return 'Otros'
+    }
+  }
+
+  // Filtrar apartamentos por búsqueda
   const filteredApartments = apartments.filter(apt =>
     apt.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     apt.city.toLowerCase().includes(searchTerm.toLowerCase())
   )
+
+  // Agrupar apartamentos por tipo
+  const groupedApartments = filteredApartments.reduce((groups, apt) => {
+    const type = getApartmentType(apt.name)
+    if (!groups[type]) {
+      groups[type] = []
+    }
+    groups[type].push(apt)
+    return groups
+  }, {})
+
+  // Orden de tipos para mostrar
+  const typeOrder = ['quadruple', 'triple', 'double_matrimonial', 'double_twin', 'unknown']
+  
+  // Ordenar tipos según el orden deseado
+  const sortedTypes = typeOrder.filter(type => groupedApartments[type] && groupedApartments[type].length > 0)
+
+  // Debug: Verificar agrupación
+  console.log('🔍 Debug - Apartamentos filtrados:', filteredApartments.length)
+  console.log('🔍 Debug - Tipos agrupados:', Object.keys(groupedApartments))
+  console.log('🔍 Debug - Tipos ordenados:', sortedTypes)
+  console.log('🔍 Debug - Agrupación completa:', groupedApartments)
 
   const filteredBookings = bookings.filter(booking =>
     booking.user_info?.first_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -161,38 +205,67 @@ const AdminDashboard = () => {
               <div className="w-12 h-12 border-4 border-primary-600 border-t-transparent rounded-full animate-spin" />
             </div>
           ) : activeTab === 'apartments' ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredApartments.map((apt) => (
-                <motion.div
-                  key={apt.id}
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="bg-white rounded-lg shadow-md p-6"
-                >
-                  <h3 className="text-xl font-bold text-gray-800 mb-2">{apt.name}</h3>
-                  <p className="text-gray-600 text-sm mb-4">{apt.city}</p>
-                  <div className="flex items-center justify-between mb-4">
-                    <span className="text-2xl font-bold text-primary-600">${apt.price_per_night}</span>
-                    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                      apt.available ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                    }`}>
-                      {apt.available ? 'Disponible' : 'No disponible'}
-                    </span>
-                  </div>
-                  <div className="flex space-x-2">
-                    <button className="flex-1 btn-secondary text-sm py-2">
-                      <Edit className="w-4 h-4 inline mr-1" />
-                      Editar
-                    </button>
-                    <button
-                      onClick={() => handleDeleteApartment(apt.id)}
-                      className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </motion.div>
-              ))}
+            <div className="space-y-8">
+              {sortedTypes.length === 0 ? (
+                <div className="text-center py-12 text-gray-500">
+                  <p className="text-lg">No hay apartamentos disponibles</p>
+                  {searchTerm && <p className="text-sm mt-2">Intenta con otro término de búsqueda</p>}
+                </div>
+              ) : (
+                sortedTypes.map((type) => (
+                  <motion.div
+                    key={type}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="space-y-4"
+                  >
+                    {/* Título de la sección */}
+                    <div className="border-b-2 border-primary-600 pb-2">
+                      <h3 className="text-2xl font-bold text-gray-800">
+                        {getTypeDisplayName(type)}
+                      </h3>
+                      <p className="text-sm text-gray-600 mt-1">
+                        {groupedApartments[type].length} {groupedApartments[type].length === 1 ? 'apartamento' : 'apartamentos'}
+                      </p>
+                    </div>
+
+                    {/* Grid de apartamentos del tipo */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {groupedApartments[type].map((apt) => (
+                        <motion.div
+                          key={apt.id}
+                          initial={{ opacity: 0, scale: 0.9 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow"
+                        >
+                          <h3 className="text-xl font-bold text-gray-800 mb-2">{apt.name}</h3>
+                          <p className="text-gray-600 text-sm mb-4">{apt.city}</p>
+                          <div className="flex items-center justify-between mb-4">
+                            <span className="text-2xl font-bold text-primary-600">${apt.price_per_night}</span>
+                            <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                              apt.available ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                            }`}>
+                              {apt.available ? 'Disponible' : 'No disponible'}
+                            </span>
+                          </div>
+                          <div className="flex space-x-2">
+                            <button className="flex-1 btn-secondary text-sm py-2">
+                              <Edit className="w-4 h-4 inline mr-1" />
+                              Editar
+                            </button>
+                            <button
+                              onClick={() => handleDeleteApartment(apt.id)}
+                              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </motion.div>
+                      ))}
+                    </div>
+                  </motion.div>
+                ))
+              )}
             </div>
           ) : (
             <div className="bg-white rounded-lg shadow-md overflow-hidden">
@@ -209,45 +282,56 @@ const AdminDashboard = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {filteredBookings.map((booking) => (
-                    <tr key={booking.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        #{booking.id}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                        {booking.user_info?.first_name} {booking.user_info?.last_name}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                        Apt #{booking.apartment_id}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                        {format(new Date(booking.check_in), 'dd/MM/yyyy')} - {format(new Date(booking.check_out), 'dd/MM/yyyy')}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        ${booking.total_price}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                          booking.status === 'confirmed' ? 'bg-green-100 text-green-700' :
-                          booking.status === 'cancelled' ? 'bg-red-100 text-red-700' :
-                          'bg-yellow-100 text-yellow-700'
-                        }`}>
-                          {booking.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm space-x-2">
-                        <button className="text-primary-600 hover:text-primary-700">
-                          <Edit className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteBooking(booking.id)}
-                          className="text-red-600 hover:text-red-700"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                  {filteredBookings.length === 0 ? (
+                    <tr>
+                      <td colSpan="7" className="px-6 py-8 text-center text-gray-500">
+                        No hay reservas disponibles
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    filteredBookings.map((booking) => (
+                      <tr key={booking.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                          #{booking.id}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                          {booking.user_info?.first_name || 'N/A'} {booking.user_info?.last_name || ''}
+                          {booking.created_by_admin && (
+                            <span className="ml-2 text-xs text-blue-600">(Admin)</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                          Apt #{booking.apartment_id}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                          {format(new Date(booking.check_in), 'dd/MM/yyyy')} - {format(new Date(booking.check_out), 'dd/MM/yyyy')}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                          ${booking.total_price?.toFixed(2) || '0.00'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                            booking.status === 'confirmed' ? 'bg-green-100 text-green-700' :
+                            booking.status === 'cancelled' ? 'bg-red-100 text-red-700' :
+                            'bg-yellow-100 text-yellow-700'
+                          }`}>
+                            {booking.status || 'confirmed'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm space-x-2">
+                          <button className="text-primary-600 hover:text-primary-700">
+                            <Edit className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteBooking(booking.id)}
+                            className="text-red-600 hover:text-red-700"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>

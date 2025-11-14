@@ -84,6 +84,7 @@ func main() {
 	api := router.Group("/api/v1")
 	{
 		api.POST("/bookings", bookingController.CreateBooking)
+		api.GET("/bookings", bookingController.GetAllBookings) // GET /bookings - todas las reservas (admin)
 		api.GET("/bookings/:id", bookingController.GetBookingByID)
 		api.GET("/bookings/user/:user_id", bookingController.GetBookingsByUserID)
 		api.PATCH("/bookings/:id", bookingController.UpdateBooking)

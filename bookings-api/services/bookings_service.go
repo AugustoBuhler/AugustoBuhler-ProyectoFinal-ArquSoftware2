@@ -15,6 +15,7 @@ type BookingService interface {
 	CreateBooking(ctx context.Context, req domain.CreateBookingRequest, isAdmin bool, adminUserID *int64) (*domain.Booking, error)
 	GetBookingByID(ctx context.Context, id int64) (*domain.Booking, error)
 	GetBookingsByUserID(ctx context.Context, userID int64) ([]*domain.Booking, error)
+	GetAllBookings(ctx context.Context, filters map[string]interface{}, page, size int) ([]*domain.Booking, int64, error)
 	UpdateBooking(ctx context.Context, id int64, req domain.UpdateBookingRequest) (*domain.Booking, error)
 	DeleteBooking(ctx context.Context, id int64) error
 }
@@ -61,38 +62,107 @@ func (s *bookingService) CreateBooking(ctx context.Context, req domain.CreateBoo
 		return nil, errors.New("check_out must be after check_in")
 	}
 
+	// Determinar apartment_id antes de las goroutines
+	var apartmentID int64
+	var apartment *repositories.ApartmentInfo
+
+	if req.ApartmentID != nil {
+		// Si viene apartment_id, usar ese (admin)
+		apartmentID = *req.ApartmentID
+	} else if req.ApartmentType != "" {
+		// Si viene apartment_type, buscar TODOS los apartamentos del tipo y verificar disponibilidad uno por uno
+		allApartments, err := s.apartmentsClient.GetAllApartmentsByType(req.ApartmentType)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get apartments of type %s: %w", req.ApartmentType, err)
+		}
+		if len(allApartments) == 0 {
+			return nil, fmt.Errorf("no apartments of type %s found", req.ApartmentType)
+		}
+
+		// Iterar sobre TODOS los apartamentos del tipo y verificar disponibilidad real
+		// hasta encontrar uno disponible para las fechas solicitadas
+		var foundAvailable *repositories.ApartmentInfo
+		for _, apt := range allApartments {
+			// Verificar que el apartamento tenga capacidad suficiente
+			if apt.MaxGuests < req.Guests {
+				// Saltar este apartamento, no tiene capacidad suficiente
+				continue
+			}
+
+			// Verificar disponibilidad REAL usando el repository (verifica contra bookings reales en MongoDB)
+			// Esta verificación consulta MongoDB directamente para ver si hay reservas solapadas
+			available, err := s.bookingRepo.CheckAvailability(ctx, apt.ID, checkIn, checkOut, nil)
+			if err != nil {
+				// Si hay error al verificar, continuar con el siguiente apartamento
+				// NO asignar este apartamento si hay error
+				continue
+			}
+			
+			// CRÍTICO: Solo asignar si available == true (sin reservas solapadas)
+			// Si available == false, significa que hay reservas que se solapan con las fechas solicitadas
+			if available {
+				// ¡Encontramos uno disponible y con capacidad suficiente!
+				// Asignar este apartamento y salir del bucle
+				foundAvailable = apt
+				// Salir inmediatamente, ya tenemos uno disponible
+				break
+			}
+			// Si available == false, este apartamento NO está disponible
+			// Continuar con el siguiente apartamento en el bucle
+		}
+
+		if foundAvailable == nil {
+			// No encontramos ningún apartamento disponible del tipo solicitado
+			// Retornar error descriptivo
+			return nil, fmt.Errorf("no apartments of type %s available for the requested date range (checked %d apartments)", req.ApartmentType, len(allApartments))
+		}
+
+		apartmentID = foundAvailable.ID
+		apartment = foundAvailable // Ya tenemos el apartamento disponible verificado, no necesitamos buscarlo de nuevo
+	} else {
+		return nil, errors.New("apartment_id or apartment_type is required")
+	}
+
 	// CÁLCULO CONCURRENTE usando goroutines, channels y WaitGroup
 	var wg sync.WaitGroup
 	errChan := make(chan error, 2)
 	resultChan := make(chan interface{}, 2)
 
-	var apartment *repositories.ApartmentInfo
-
-	// Goroutine 1: Validar y obtener información del apartamento
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		apt, err := s.apartmentsClient.GetApartmentByID(req.ApartmentID)
-		if err != nil {
-			errChan <- fmt.Errorf("apartment validation failed: %w", err)
-			return
+	// Goroutine 1: Validar y obtener información del apartamento (si no se obtuvo por tipo)
+	if apartment == nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			apt, err := s.apartmentsClient.GetApartmentByID(apartmentID)
+			if err != nil {
+				errChan <- fmt.Errorf("apartment validation failed: %w", err)
+				return
+			}
+			if !apt.Available {
+				errChan <- errors.New("apartment is not available")
+				return
+			}
+			if apt.MaxGuests < req.Guests {
+				errChan <- fmt.Errorf("apartment max capacity (%d) is less than requested guests (%d)", apt.MaxGuests, req.Guests)
+				return
+			}
+			resultChan <- apt
+		}()
+	} else {
+		// Si ya tenemos el apartment por tipo, validar capacidad antes de continuar
+		if apartment.MaxGuests < req.Guests {
+			return nil, fmt.Errorf("apartment max capacity (%d) is less than requested guests (%d)", apartment.MaxGuests, req.Guests)
 		}
-		if !apt.Available {
-			errChan <- errors.New("apartment is not available")
-			return
-		}
-		if apt.MaxGuests < req.Guests {
-			errChan <- fmt.Errorf("apartment max capacity (%d) is less than requested guests (%d)", apt.MaxGuests, req.Guests)
-			return
-		}
-		resultChan <- apt
-	}()
+	}
 
 	// Goroutine 2: Validar usuario (si se proporciona user_id)
+	// NOTA: user_id es opcional. Solo se valida si se proporciona.
+	// Si no viene user_id, es una reserva pública (sin login) y es válida.
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		if req.UserID != nil {
+			// Solo validar si se proporciona user_id (admin creando para un usuario específico)
 			exists, err := s.usersClient.GetUserByID(*req.UserID)
 			if err != nil {
 				errChan <- fmt.Errorf("user validation failed: %w", err)
@@ -104,7 +174,7 @@ func (s *bookingService) CreateBooking(ctx context.Context, req domain.CreateBoo
 			}
 			resultChan <- exists
 		} else {
-			// Si no hay user_id, es una reserva pública (válida)
+			// Si no hay user_id, es una reserva pública (válida) - no requiere login
 			resultChan <- true
 		}
 	}()
@@ -122,18 +192,32 @@ func (s *bookingService) CreateBooking(ctx context.Context, req domain.CreateBoo
 	}
 
 	// Procesar resultados de las goroutines
-	for result := range resultChan {
-		switch v := result.(type) {
-		case *repositories.ApartmentInfo:
-			apartment = v
-		case bool:
-			// userValid - ya validado en la goroutine
-			_ = v
-		}
-	}
-
 	if apartment == nil {
-		return nil, errors.New("failed to get apartment information")
+		for result := range resultChan {
+			switch v := result.(type) {
+			case *repositories.ApartmentInfo:
+				apartment = v
+			case bool:
+				// userValid - ya validado en la goroutine
+				_ = v
+			}
+		}
+
+		if apartment == nil {
+			return nil, errors.New("failed to get apartment information")
+		}
+	} else {
+		// Si ya tenemos el apartment, solo procesar user validation
+		for result := range resultChan {
+			switch v := result.(type) {
+			case bool:
+				// userValid - ya validado en la goroutine
+				_ = v
+			case *repositories.ApartmentInfo:
+				// Ya tenemos el apartment, ignorar
+				_ = v
+			}
+		}
 	}
 
 	// Calcular precio total (usando información del apartamento obtenido concurrentemente)
@@ -144,11 +228,55 @@ func (s *bookingService) CreateBooking(ctx context.Context, req domain.CreateBoo
 	totalPrice := float64(days) * apartment.PricePerNight
 
 	// Validar disponibilidad atómica (antes de crear la reserva)
-	available, err := s.bookingRepo.CheckAvailability(ctx, req.ApartmentID, checkIn, checkOut, nil)
+	// Esta verificación previene condiciones de carrera donde otro proceso pudo haber reservado
+	// el apartamento justo antes de que creemos esta reserva
+	available, err := s.bookingRepo.CheckAvailability(ctx, apartmentID, checkIn, checkOut, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check availability: %w", err)
 	}
-	if !available {
+	
+	// Si no está disponible Y buscamos por tipo, intentar buscar otro apartamento del mismo tipo
+	if !available && req.ApartmentType != "" {
+		// Guardar el ID del apartamento que no está disponible
+		unavailableApartmentID := apartmentID
+		
+		// Reintentar buscar otro apartamento disponible del mismo tipo
+		allApartments, err := s.apartmentsClient.GetAllApartmentsByType(req.ApartmentType)
+		if err == nil && len(allApartments) > 0 {
+			// Intentar encontrar otro apartamento del tipo que esté disponible
+			foundAlternative := false
+			for _, apt := range allApartments {
+				if apt.ID == unavailableApartmentID {
+					continue // Saltar el que ya verificamos y no está disponible
+				}
+				if apt.MaxGuests < req.Guests {
+					continue // Saltar si no tiene capacidad suficiente
+				}
+				
+				// Verificar disponibilidad del siguiente apartamento
+				altAvailable, err := s.bookingRepo.CheckAvailability(ctx, apt.ID, checkIn, checkOut, nil)
+				if err == nil && altAvailable {
+					// ¡Encontramos otro disponible! Actualizar referencias
+					apartmentID = apt.ID
+					apartment = apt
+					totalPrice = float64(days) * apt.PricePerNight
+					foundAlternative = true
+					// Salir del bucle, usar este apartamento
+					break
+				}
+			}
+			
+			if !foundAlternative {
+				// No encontramos otro disponible, retornar error
+				return nil, fmt.Errorf("no apartments of type %s available for the requested date range (all are booked)", req.ApartmentType)
+			}
+			// Si encontramos uno alternativo, continuar con la creación de la reserva
+		} else {
+			// No se pudo buscar otros apartamentos, retornar error
+			return nil, errors.New("apartment is not available for the requested date range")
+		}
+	} else if !available {
+		// Si no buscamos por tipo o no hay más apartamentos del tipo, retornar error
 		return nil, errors.New("apartment is not available for the requested date range")
 	}
 
@@ -157,13 +285,18 @@ func (s *bookingService) CreateBooking(ctx context.Context, req domain.CreateBoo
 		return nil, fmt.Errorf("invalid guest information: %w", err)
 	}
 
+	// Validar capacidad
+	if apartment.MaxGuests < req.Guests {
+		return nil, fmt.Errorf("apartment max capacity (%d) is less than requested guests (%d)", apartment.MaxGuests, req.Guests)
+	}
+
 	// Asignar DNI como ID del huésped
 	guestInfo := req.GuestInfo
 	guestInfo.ID = req.GuestInfo.DNI
 
 	// Crear la reserva
 	booking := &domain.Booking{
-		ApartmentID:    req.ApartmentID,
+		ApartmentID:    apartmentID,
 		UserID:         req.UserID,
 		GuestInfo:      guestInfo,
 		CheckIn:        checkIn,
@@ -195,6 +328,33 @@ func (s *bookingService) GetBookingByID(ctx context.Context, id int64) (*domain.
 
 func (s *bookingService) GetBookingsByUserID(ctx context.Context, userID int64) ([]*domain.Booking, error) {
 	return s.bookingRepo.GetByUserID(ctx, userID)
+}
+
+func (s *bookingService) GetAllBookings(ctx context.Context, filters map[string]interface{}, page, size int) ([]*domain.Booking, int64, error) {
+	if page < 1 {
+		page = 1
+	}
+	if size < 1 {
+		size = 10
+	}
+	if size > 100 {
+		size = 100
+	}
+
+	skip := int64((page - 1) * size)
+	limit := int64(size)
+
+	bookings, err := s.bookingRepo.GetAll(ctx, filters, skip, limit)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	total, err := s.bookingRepo.Count(ctx, filters)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return bookings, total, nil
 }
 
 func (s *bookingService) UpdateBooking(ctx context.Context, id int64, req domain.UpdateBookingRequest) (*domain.Booking, error) {

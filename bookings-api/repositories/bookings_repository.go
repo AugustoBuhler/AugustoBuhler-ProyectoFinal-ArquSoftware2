@@ -16,6 +16,8 @@ type BookingRepository interface {
 	Create(ctx context.Context, booking *domain.Booking) error
 	GetByID(ctx context.Context, id int64) (*domain.Booking, error)
 	GetByUserID(ctx context.Context, userID int64) ([]*domain.Booking, error)
+	GetAll(ctx context.Context, filters map[string]interface{}, skip, limit int64) ([]*domain.Booking, error)
+	Count(ctx context.Context, filters map[string]interface{}) (int64, error)
 	Update(ctx context.Context, id int64, booking *domain.Booking) error
 	Delete(ctx context.Context, id int64) error
 	CheckAvailability(ctx context.Context, apartmentID int64, checkIn, checkOut time.Time, excludeBookingID *int64) (bool, error)
@@ -88,6 +90,53 @@ func (r *bookingRepository) GetByUserID(ctx context.Context, userID int64) ([]*d
 	return bookings, nil
 }
 
+func (r *bookingRepository) GetAll(ctx context.Context, filters map[string]interface{}, skip, limit int64) ([]*domain.Booking, error) {
+	filter := bson.M{}
+	
+	// Aplicar filtros opcionales
+	if apartmentID, ok := filters["apartment_id"]; ok {
+		filter["apartment_id"] = apartmentID
+	}
+	if status, ok := filters["status"]; ok {
+		filter["status"] = status
+	}
+	if userID, ok := filters["user_id"]; ok {
+		filter["user_id"] = userID
+	}
+	// Nota: Si user_id no está en filtros, retorna TODAS las reservas (públicas y con user_id)
+
+	opts := options.Find().SetSkip(skip).SetLimit(limit).SetSort(bson.D{{Key: "id", Value: -1}})
+	cursor, err := r.collection.Find(ctx, filter, opts)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var bookings []*domain.Booking
+	if err = cursor.All(ctx, &bookings); err != nil {
+		return nil, err
+	}
+	return bookings, nil
+}
+
+func (r *bookingRepository) Count(ctx context.Context, filters map[string]interface{}) (int64, error) {
+	filter := bson.M{}
+	
+	// Aplicar filtros opcionales
+	if apartmentID, ok := filters["apartment_id"]; ok {
+		filter["apartment_id"] = apartmentID
+	}
+	if status, ok := filters["status"]; ok {
+		filter["status"] = status
+	}
+	if userID, ok := filters["user_id"]; ok {
+		filter["user_id"] = userID
+	}
+
+	count, err := r.collection.CountDocuments(ctx, filter)
+	return count, err
+}
+
 func (r *bookingRepository) Update(ctx context.Context, id int64, booking *domain.Booking) error {
 	booking.UpdatedAt = time.Now()
 	update := bson.M{"$set": booking}
@@ -118,16 +167,12 @@ func (r *bookingRepository) CheckAvailability(ctx context.Context, apartmentID i
 	// Buscar reservas que se solapen con el rango solicitado
 	// Un solapamiento ocurre cuando:
 	// - existing.check_in < requested.check_out AND existing.check_out > requested.check_in
+	// En MongoDB, múltiples condiciones en el mismo nivel se evalúan con AND implícito
 	filter := bson.M{
 		"apartment_id": apartmentID,
 		"status":       bson.M{"$ne": "cancelled"}, // Excluir reservas canceladas
-		"$or": []bson.M{
-			{
-				// Solapamiento: check_in < requested.check_out AND check_out > requested.check_in
-				"check_in":  bson.M{"$lt": checkOut},
-				"check_out": bson.M{"$gt": checkIn},
-			},
-		},
+		"check_in":     bson.M{"$lt": checkOut},    // existing.check_in < requested.check_out
+		"check_out":    bson.M{"$gt": checkIn},     // existing.check_out > requested.check_in
 	}
 
 	// Excluir la reserva actual si se está actualizando

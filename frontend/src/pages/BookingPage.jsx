@@ -1,13 +1,16 @@
 import { useState, useEffect } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Calendar, User, Mail, Phone, CreditCard, ArrowLeft } from 'lucide-react'
 import { getApartmentById, createBooking } from '../services/api'
+import { getAvailableApartmentByType } from '../services/apartmentTypes'
 import { format } from 'date-fns'
 
 const BookingPage = () => {
   const { id } = useParams()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const apartmentType = searchParams.get('type')
   const [apartment, setApartment] = useState(null)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -27,8 +30,21 @@ const BookingPage = () => {
   useEffect(() => {
     const loadApartment = async () => {
       try {
-        const data = await getApartmentById(id)
-        setApartment(data)
+        if (apartmentType) {
+          // Si viene un tipo, cargar un apartamento disponible (se asignará al reservar)
+          // Por ahora, no cargamos uno específico hasta tener las fechas
+          // Mostramos información del tipo
+          setApartment({
+            id: null,
+            name: apartmentType,
+            price_per_night: 0,
+            max_guests: apartmentType === 'quadruple' ? 4 : apartmentType === 'triple' ? 3 : 2,
+          })
+        } else if (id) {
+          // Si viene un ID, cargar ese apartamento específico
+          const data = await getApartmentById(id)
+          setApartment(data)
+        }
       } catch (err) {
         console.error(err)
       } finally {
@@ -36,7 +52,7 @@ const BookingPage = () => {
       }
     }
     loadApartment()
-  }, [id])
+  }, [id, apartmentType])
 
   const handleChange = (e) => {
     const { name, value } = e.target
@@ -83,8 +99,29 @@ const BookingPage = () => {
 
     setSubmitting(true)
     try {
+      // Si viene apartmentType, buscar un apartamento disponible del tipo
+      let apartmentID = null
+      if (apartmentType) {
+        try {
+          const availableApartment = await getAvailableApartmentByType(
+            apartmentType,
+            formData.check_in,
+            formData.check_out
+          )
+          apartmentID = availableApartment.id
+          setApartment(availableApartment) // Actualizar para mostrar en resumen
+        } catch (err) {
+          alert('No hay apartamentos disponibles de este tipo para las fechas seleccionadas.')
+          setSubmitting(false)
+          return
+        }
+      } else {
+        apartmentID = parseInt(id)
+      }
+
       const bookingData = {
-        apartment_id: parseInt(id),
+        ...(apartmentID ? { apartment_id: apartmentID } : {}),
+        ...(apartmentType ? { apartment_type: apartmentType } : {}),
         check_in: formData.check_in,
         check_out: formData.check_out,
         guests: parseInt(formData.guests),
@@ -120,16 +157,6 @@ const BookingPage = () => {
     )
   }
 
-  if (!apartment) {
-    return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
-          Apartamento no encontrado
-        </div>
-      </div>
-    )
-  }
-
   const calculateNights = () => {
     if (formData.check_in && formData.check_out) {
       const checkIn = new Date(formData.check_in)
@@ -142,7 +169,17 @@ const BookingPage = () => {
   }
 
   const nights = calculateNights()
-  const totalPrice = nights * apartment.price_per_night
+  const totalPrice = nights * (apartment?.price_per_night || 0)
+
+  if (!apartment) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+          {apartmentType ? 'Tipo de apartamento no encontrado' : 'Apartamento no encontrado'}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -218,15 +255,17 @@ const BookingPage = () => {
                   value={formData.guests}
                   onChange={handleChange}
                   min="1"
-                  max={apartment.max_guests}
+                  max={apartment?.max_guests || 10}
                   className={`input-field ${errors.guests ? 'border-red-500' : ''}`}
                 />
                 {errors.guests && (
                   <p className="text-red-500 text-xs mt-1">{errors.guests}</p>
                 )}
-                <p className="text-xs text-gray-500 mt-1">
-                  Máximo {apartment.max_guests} huéspedes
-                </p>
+                {apartment?.max_guests && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Máximo {apartment.max_guests} huéspedes
+                  </p>
+                )}
               </div>
 
               <div className="border-t pt-6">
@@ -355,32 +394,49 @@ const BookingPage = () => {
             <h3 className="text-2xl font-bold text-gray-800 mb-4">Resumen</h3>
             
             <div className="mb-4">
-              <h4 className="font-semibold text-gray-800">{apartment.name}</h4>
-              <p className="text-sm text-gray-600">{apartment.city}</p>
-            </div>
-
-            <div className="border-t border-b py-4 space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Precio por noche</span>
-                <span className="font-semibold">${apartment.price_per_night}</span>
-              </div>
-              {nights > 0 && (
-                <>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Noches</span>
-                    <span className="font-semibold">{nights}</span>
-                  </div>
-                  <div className="flex justify-between text-lg font-bold pt-2 border-t">
-                    <span>Total</span>
-                    <span className="text-primary-600">${totalPrice.toFixed(2)}</span>
-                  </div>
-                </>
+              <h4 className="font-semibold text-gray-800">
+                {apartmentType ? `Tipo: ${apartmentType}` : apartment.name}
+              </h4>
+              {apartment.city && (
+                <p className="text-sm text-gray-600">{apartment.city}</p>
+              )}
+              {apartmentType && (
+                <p className="text-sm text-gray-500 mt-1">
+                  Se asignará un apartamento disponible al confirmar
+                </p>
               )}
             </div>
 
-            {nights === 0 && (
+            <div className="border-t border-b py-4 space-y-2">
+              {apartment.price_per_night > 0 ? (
+                <>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Precio por noche</span>
+                    <span className="font-semibold">${apartment.price_per_night}</span>
+                  </div>
+                  {nights > 0 && (
+                    <>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Noches</span>
+                        <span className="font-semibold">{nights}</span>
+                      </div>
+                      <div className="flex justify-between text-lg font-bold pt-2 border-t">
+                        <span>Total</span>
+                        <span className="text-primary-600">${totalPrice.toFixed(2)}</span>
+                      </div>
+                    </>
+                  )}
+                </>
+              ) : (
+                <p className="text-sm text-gray-500">
+                  Selecciona las fechas para ver el precio
+                </p>
+              )}
+            </div>
+
+            {nights === 0 && apartment.price_per_night === 0 && (
               <p className="text-sm text-gray-500 mt-4">
-                Selecciona las fechas para ver el total
+                Selecciona las fechas para calcular el precio total
               </p>
             )}
           </motion.div>

@@ -3,6 +3,7 @@ package controllers
 import (
 	"net/http"
 	"strconv"
+	"time"
 
 	"apartments-api/domain"
 	"apartments-api/services"
@@ -103,6 +104,53 @@ func (c *ApartmentController) GetAllApartments(ctx *gin.Context) {
 		"page":       page,
 		"size":       size,
 	})
+}
+
+func (c *ApartmentController) GetApartmentTypes(ctx *gin.Context) {
+	types, err := c.aptService.GetApartmentTypes(ctx.Request.Context())
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"data": types,
+	})
+}
+
+func (c *ApartmentController) GetAvailableApartmentByType(ctx *gin.Context) {
+	aptType := ctx.Query("type")
+	if aptType == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "type parameter is required"})
+		return
+	}
+
+	checkInStr := ctx.Query("check_in")
+	checkOutStr := ctx.Query("check_out")
+	if checkInStr == "" || checkOutStr == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "check_in and check_out parameters are required"})
+		return
+	}
+
+	checkIn, err := time.Parse("2006-01-02", checkInStr)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid check_in date format"})
+		return
+	}
+
+	checkOut, err := time.Parse("2006-01-02", checkOutStr)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid check_out date format"})
+		return
+	}
+
+	apartment, err := c.aptService.GetAvailableApartmentByType(ctx.Request.Context(), aptType, checkIn, checkOut)
+	if err != nil {
+		ctx.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, apartment)
 }
 
 func (c *ApartmentController) UpdateApartment(ctx *gin.Context) {
