@@ -11,29 +11,52 @@
  * @param {string} dateString - Fecha en formato "YYYY-MM-DD" (ej: "2025-11-29")
  * @returns {string} - Fecha formateada como "dd/MM/yyyy" o "N/A" si es inválida
  */
-export const formatDate = (dateString) => {
-  if (!dateString) return 'N/A'
+export const formatDate = (dateValue) => {
+  if (!dateValue) return 'N/A'
   
-  // Debug: Log para ver qué recibimos
-  console.log('🔍 formatDate recibió:', dateString, 'tipo:', typeof dateString)
+  // ESTRATEGIA: Extraer componentes de fecha directamente sin usar Date
+  // para evitar completamente problemas de zona horaria
   
-  // El backend ahora devuelve directamente "YYYY-MM-DD"
+  let dateStr = null
+  
+  // Caso 1: Es un string directo "YYYY-MM-DD"
+  if (typeof dateValue === 'string') {
+    dateStr = dateValue
+  }
+  // Caso 2: Es un objeto Date (puede pasar si axios lo convierte)
+  else if (dateValue instanceof Date) {
+    // Extraer la fecha directamente del ISO string del Date usando UTC
+    // Ejemplo: "2026-01-14T00:00:00.000Z" → "2026-01-14"
+    const isoString = dateValue.toISOString()
+    dateStr = isoString.split('T')[0]
+  }
+  // Caso 3: Es otro tipo, intentar convertir a string
+  else {
+    dateStr = String(dateValue)
+  }
+  
+  // Extraer solo la parte de la fecha (YYYY-MM-DD) del string
   // Si viene en formato ISO completo (por compatibilidad), extraer solo la fecha
-  let datePart = dateString
-  if (typeof dateString === 'string' && dateString.includes('T')) {
-    datePart = dateString.split('T')[0] // "2025-11-29T00:00:00Z" → "2025-11-29"
+  let datePart = dateStr
+  if (dateStr && dateStr.includes('T')) {
+    datePart = dateStr.split('T')[0] // "2025-11-29T00:00:00Z" → "2025-11-29"
   }
   
   // Validar formato YYYY-MM-DD
   if (!datePart || !datePart.match(/^\d{4}-\d{2}-\d{2}$/)) {
-    console.error('❌ formatDate: formato inválido:', datePart)
+    // Si no coincide, intentar parsear como Date y usar UTC
+    if (dateValue instanceof Date) {
+      const year = dateValue.getUTCFullYear()
+      const month = dateValue.getUTCMonth() + 1
+      const day = dateValue.getUTCDate()
+      return `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}/${year}`
+    }
     return 'N/A'
   }
   
   // Parsear año, mes y día directamente del string
   const parts = datePart.split('-')
   if (parts.length !== 3) {
-    console.error('❌ formatDate: partes incorrectas:', parts)
     return 'N/A'
   }
   
@@ -43,13 +66,11 @@ export const formatDate = (dateString) => {
   
   // Validar que sean números válidos
   if (isNaN(year) || isNaN(month) || isNaN(day)) {
-    console.error('❌ formatDate: números inválidos:', { year, month, day })
     return 'N/A'
   }
   
   // Validar rangos
   if (month < 1 || month > 12 || day < 1 || day > 31) {
-    console.error('❌ formatDate: rangos inválidos:', { month, day })
     return 'N/A'
   }
   
@@ -57,10 +78,8 @@ export const formatDate = (dateString) => {
   // Esto evita completamente cualquier problema de zona horaria
   const dayStr = String(day).padStart(2, '0')
   const monthStr = String(month).padStart(2, '0')
-  const result = `${dayStr}/${monthStr}/${year}`
   
-  console.log('✅ formatDate resultado:', result, 'para input:', dateString)
-  return result
+  return `${dayStr}/${monthStr}/${year}`
 }
 
 /**

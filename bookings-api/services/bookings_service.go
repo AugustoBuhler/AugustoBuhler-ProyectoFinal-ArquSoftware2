@@ -48,20 +48,24 @@ func NewBookingService(
 // CreateBooking implementa cálculo concurrente usando goroutines, channels y WaitGroup
 func (s *bookingService) CreateBooking(ctx context.Context, req domain.CreateBookingRequest, isAdmin bool, adminUserID *int64) (*domain.Booking, error) {
 	// Parsear fechas en UTC para evitar problemas de zona horaria
-	// time.Parse con layout "2006-01-02" crea fechas en UTC por defecto
-	checkIn, err := time.Parse("2006-01-02", req.CheckIn)
+	// CRÍTICO: time.Parse con layout "2006-01-02" crea fechas en UTC, pero para estar seguros,
+	// parseamos y luego construimos una nueva fecha explícitamente en UTC usando time.Date
+	parsedCheckIn, err := time.Parse("2006-01-02", req.CheckIn)
 	if err != nil {
 		return nil, fmt.Errorf("invalid check_in date format: %w", err)
 	}
-	// Asegurar que está en UTC
-	checkIn = checkIn.UTC()
+	// Construir fecha explícitamente en UTC usando los componentes extraídos
+	// Esto asegura que la fecha se almacene correctamente en MongoDB
+	var checkIn time.Time
+	checkIn = time.Date(parsedCheckIn.Year(), parsedCheckIn.Month(), parsedCheckIn.Day(), 0, 0, 0, 0, time.UTC)
 
-	checkOut, err := time.Parse("2006-01-02", req.CheckOut)
+	parsedCheckOut, err := time.Parse("2006-01-02", req.CheckOut)
 	if err != nil {
 		return nil, fmt.Errorf("invalid check_out date format: %w", err)
 	}
-	// Asegurar que está en UTC
-	checkOut = checkOut.UTC()
+	// Construir fecha explícitamente en UTC usando los componentes extraídos
+	var checkOut time.Time
+	checkOut = time.Date(parsedCheckOut.Year(), parsedCheckOut.Month(), parsedCheckOut.Day(), 0, 0, 0, 0, time.UTC)
 
 	if checkOut.Before(checkIn) || checkOut.Equal(checkIn) {
 		return nil, errors.New("check_out must be after check_in")
@@ -410,7 +414,8 @@ func (s *bookingService) UpdateBooking(ctx context.Context, id int64, req domain
 		if err != nil {
 			return nil, fmt.Errorf("invalid check_in date format: %w", err)
 		}
-		checkIn = parsed.UTC() // Asegurar que está en UTC
+		// Construir fecha explícitamente en UTC usando los componentes extraídos
+		checkIn = time.Date(parsed.Year(), parsed.Month(), parsed.Day(), 0, 0, 0, 0, time.UTC)
 	}
 
 	if req.CheckOut != nil {
@@ -418,7 +423,8 @@ func (s *bookingService) UpdateBooking(ctx context.Context, id int64, req domain
 		if err != nil {
 			return nil, fmt.Errorf("invalid check_out date format: %w", err)
 		}
-		checkOut = parsed.UTC() // Asegurar que está en UTC
+		// Construir fecha explícitamente en UTC usando los componentes extraídos
+		checkOut = time.Date(parsed.Year(), parsed.Month(), parsed.Day(), 0, 0, 0, 0, time.UTC)
 	}
 
 	if req.Guests != nil {

@@ -72,6 +72,20 @@ func (r *bookingRepository) GetByID(ctx context.Context, id int64) (*domain.Book
 		}
 		return nil, err
 	}
+	// Asegurar que las fechas estén en UTC al leerlas de MongoDB
+	// CRÍTICO: MongoDB almacena fechas en UTC, pero cuando Go las lee, puede interpretarlas
+	// en la zona horaria local. Usamos .UTC() para convertir a UTC y luego extraemos
+	// los componentes de fecha directamente de UTC usando los métodos UTC del time.Time
+	if !booking.CheckIn.IsZero() {
+		utcTime := booking.CheckIn.UTC()
+		year, month, day := utcTime.Year(), utcTime.Month(), utcTime.Day()
+		booking.CheckIn = time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
+	}
+	if !booking.CheckOut.IsZero() {
+		utcTime := booking.CheckOut.UTC()
+		year, month, day := utcTime.Year(), utcTime.Month(), utcTime.Day()
+		booking.CheckOut = time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
+	}
 	return &booking, nil
 }
 
@@ -86,6 +100,20 @@ func (r *bookingRepository) GetByUserID(ctx context.Context, userID int64) ([]*d
 	var bookings []*domain.Booking
 	if err = cursor.All(ctx, &bookings); err != nil {
 		return nil, err
+	}
+	// Asegurar que todas las fechas estén en UTC al leerlas de MongoDB
+	// CRÍTICO: Extraer componentes de fecha directamente de UTC
+	for i := range bookings {
+		if !bookings[i].CheckIn.IsZero() {
+			utcTime := bookings[i].CheckIn.UTC()
+			year, month, day := utcTime.Year(), utcTime.Month(), utcTime.Day()
+			bookings[i].CheckIn = time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
+		}
+		if !bookings[i].CheckOut.IsZero() {
+			utcTime := bookings[i].CheckOut.UTC()
+			year, month, day := utcTime.Year(), utcTime.Month(), utcTime.Day()
+			bookings[i].CheckOut = time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
+		}
 	}
 	return bookings, nil
 }
@@ -115,6 +143,20 @@ func (r *bookingRepository) GetAll(ctx context.Context, filters map[string]inter
 	var bookings []*domain.Booking
 	if err = cursor.All(ctx, &bookings); err != nil {
 		return nil, err
+	}
+	// Asegurar que todas las fechas estén en UTC al leerlas de MongoDB
+	// CRÍTICO: Extraer componentes de fecha directamente de UTC
+	for i := range bookings {
+		if !bookings[i].CheckIn.IsZero() {
+			utcTime := bookings[i].CheckIn.UTC()
+			year, month, day := utcTime.Year(), utcTime.Month(), utcTime.Day()
+			bookings[i].CheckIn = time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
+		}
+		if !bookings[i].CheckOut.IsZero() {
+			utcTime := bookings[i].CheckOut.UTC()
+			year, month, day := utcTime.Year(), utcTime.Month(), utcTime.Day()
+			bookings[i].CheckOut = time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
+		}
 	}
 	return bookings, nil
 }

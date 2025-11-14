@@ -84,20 +84,27 @@ type BookingResponse struct {
 }
 
 // ToBookingResponse convierte un Booking a BookingResponse con fechas formateadas
-// IMPORTANTE: Las fechas se formatean usando UTC para evitar problemas de zona horaria
+// IMPORTANTE: Las fechas se formatean extrayendo año, mes y día directamente de UTC
+// para evitar problemas de zona horaria que muestren un día menos
 func (b *Booking) ToBookingResponse() *BookingResponse {
-	// Convertir las fechas a UTC antes de formatearlas para evitar que se muestren
-	// un día antes debido a la zona horaria del servidor
+	// Convertir a UTC y extraer solo los componentes de fecha (año, mes, día)
+	// para evitar que se muestre un día menos debido a la zona horaria
 	checkInUTC := b.CheckIn.UTC()
 	checkOutUTC := b.CheckOut.UTC()
+	
+	// Formatear usando los componentes de fecha en UTC
+	// Esto asegura que "2026-01-14T00:00:00Z" se muestre como "2026-01-14"
+	// independientemente de la zona horaria del servidor
+	checkInStr := formatDateOnly(checkInUTC)
+	checkOutStr := formatDateOnly(checkOutUTC)
 	
 	return &BookingResponse{
 		ID:             b.ID,
 		ApartmentID:    b.ApartmentID,
 		UserID:         b.UserID,
 		GuestInfo:      b.GuestInfo,
-		CheckIn:        checkInUTC.Format("2006-01-02"),
-		CheckOut:       checkOutUTC.Format("2006-01-02"),
+		CheckIn:        checkInStr,
+		CheckOut:       checkOutStr,
 		Guests:         b.Guests,
 		TotalPrice:     b.TotalPrice,
 		PaymentMethod:  b.PaymentMethod,
@@ -107,6 +114,17 @@ func (b *Booking) ToBookingResponse() *BookingResponse {
 		CreatedAt:      b.CreatedAt,
 		UpdatedAt:      b.UpdatedAt,
 	}
+}
+
+// formatDateOnly formatea una fecha extrayendo año, mes y día directamente de UTC
+// sin importar la zona horaria original, para evitar problemas de día anterior
+func formatDateOnly(t time.Time) string {
+	// CRÍTICO: Extraer los componentes de fecha directamente de UTC
+	// .UTC() convierte la fecha a UTC, y luego .Year()/.Month()/.Day() obtienen
+	// los componentes de fecha en UTC, no en la zona horaria local
+	utcTime := t.UTC()
+	year, month, day := utcTime.Year(), utcTime.Month(), utcTime.Day()
+	return fmt.Sprintf("%04d-%02d-%02d", year, int(month), day)
 }
 
 type CreateBookingRequest struct {

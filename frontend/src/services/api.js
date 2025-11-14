@@ -32,6 +32,20 @@ const bookingsAPI = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  // CRÍTICO: Deshabilitar transformación automática de fechas
+  // Por defecto axios NO transforma strings a Date, pero asegurémonos
+  transformResponse: [
+    (data) => {
+      try {
+        const parsed = JSON.parse(data)
+        // Si tiene fechas en formato string "YYYY-MM-DD", mantenerlas como strings
+        // NO convertir a Date automáticamente
+        return parsed
+      } catch (e) {
+        return data
+      }
+    },
+  ],
 })
 
 export const searchApartments = async (params = {}) => {

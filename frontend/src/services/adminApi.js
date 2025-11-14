@@ -21,6 +21,19 @@ const bookingsAPI = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  // CRÍTICO: Deshabilitar transformación automática de fechas
+  // Asegurar que las fechas se mantengan como strings "YYYY-MM-DD"
+  transformResponse: [
+    (data) => {
+      try {
+        const parsed = JSON.parse(data)
+        // Mantener fechas como strings, NO convertir a Date
+        return parsed
+      } catch (e) {
+        return data
+      }
+    },
+  ],
 })
 
 // Interceptor para agregar token a todas las peticiones
