@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { motion } from 'framer-motion'
-import { Home, Calendar, Users, Settings, LogOut, Plus, Edit, Trash2, Search } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Home, Calendar, Users, Settings, LogOut, Plus, Edit, Trash2, Search, X, Save, MapPin, Users as UsersIcon, Bed, Bath, DollarSign, Image as ImageIcon, CheckCircle } from 'lucide-react'
 import { logout } from '../services/auth'
 import { getAllApartments, createApartment, updateApartment, deleteApartment } from '../services/adminApi'
 import { getAllBookings, updateBooking, deleteBooking } from '../services/adminApi'
-import { format } from 'date-fns'
+import { formatDate } from '../utils/dateUtils'
 
 const AdminDashboard = () => {
   const navigate = useNavigate()
@@ -15,6 +15,9 @@ const AdminDashboard = () => {
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [editingApartment, setEditingApartment] = useState(null)
+  const [formData, setFormData] = useState({})
+  const [formErrors, setFormErrors] = useState({})
+  const [submitting, setSubmitting] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
 
   useEffect(() => {
@@ -73,6 +76,135 @@ const AdminDashboard = () => {
       loadData()
     } catch (error) {
       alert('Error al eliminar reserva')
+    }
+  }
+
+  // Funciones para manejar edición de apartamentos
+  const handleEditApartment = (apartment) => {
+    console.log('🖊️ Editando apartamento:', apartment)
+    setEditingApartment(apartment)
+    setFormData({
+      name: apartment.name || '',
+      description: apartment.description || '',
+      address: apartment.address || '',
+      city: apartment.city || '',
+      max_guests: apartment.max_guests || 1,
+      bedrooms: apartment.bedrooms || 1,
+      bathrooms: apartment.bathrooms || 1,
+      amenities: apartment.amenities ? apartment.amenities.join(', ') : '',
+      price_per_night: apartment.price_per_night || 0,
+      images: apartment.images ? apartment.images.join(', ') : '',
+      available: apartment.available !== undefined ? apartment.available : true,
+    })
+    setFormErrors({})
+    setShowModal(true)
+    console.log('✅ Modal abierto, showModal:', true)
+  }
+
+  const handleCloseModal = () => {
+    setShowModal(false)
+    setEditingApartment(null)
+    setFormData({})
+    setFormErrors({})
+  }
+
+  const handleFormChange = (e) => {
+    const { name, value, type, checked } = e.target
+    setFormData(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value
+    }))
+    // Limpiar error del campo cuando el usuario empiece a escribir
+    if (formErrors[name]) {
+      setFormErrors(prev => {
+        const newErrors = { ...prev }
+        delete newErrors[name]
+        return newErrors
+      })
+    }
+  }
+
+  const validateForm = () => {
+    const errors = {}
+    
+    if (!formData.name || formData.name.trim() === '') {
+      errors.name = 'El nombre es requerido'
+    }
+    if (!formData.address || formData.address.trim() === '') {
+      errors.address = 'La dirección es requerida'
+    }
+    if (!formData.city || formData.city.trim() === '') {
+      errors.city = 'La ciudad es requerida'
+    }
+    if (!formData.max_guests || formData.max_guests < 1) {
+      errors.max_guests = 'Debe haber al menos 1 huésped'
+    }
+    if (!formData.bedrooms || formData.bedrooms < 1) {
+      errors.bedrooms = 'Debe haber al menos 1 habitación'
+    }
+    if (!formData.bathrooms || formData.bathrooms < 1) {
+      errors.bathrooms = 'Debe haber al menos 1 baño'
+    }
+    if (!formData.price_per_night || formData.price_per_night < 0) {
+      errors.price_per_night = 'El precio debe ser mayor o igual a 0'
+    }
+
+    setFormErrors(errors)
+    return Object.keys(errors).length === 0
+  }
+
+  const handleSaveApartment = async (e) => {
+    e.preventDefault()
+    
+    if (!validateForm()) {
+      return
+    }
+
+    setSubmitting(true)
+    try {
+      // Preparar datos para enviar al backend
+      // El backend espera campos opcionales (punteros), así que enviaremos todos los campos
+      const updateData = {
+        name: formData.name.trim(),
+        description: formData.description.trim() || '',
+        address: formData.address.trim(),
+        city: formData.city.trim(),
+        max_guests: parseInt(formData.max_guests),
+        bedrooms: parseInt(formData.bedrooms),
+        bathrooms: parseInt(formData.bathrooms),
+        price_per_night: parseFloat(formData.price_per_night),
+        available: formData.available,
+      }
+
+      // Procesar amenities (separar por comas y convertir a array)
+      if (formData.amenities && formData.amenities.trim() !== '') {
+        updateData.amenities = formData.amenities.split(',').map(a => a.trim()).filter(a => a !== '')
+      } else {
+        updateData.amenities = []
+      }
+
+      // Procesar images (separar por comas y convertir a array)
+      if (formData.images && formData.images.trim() !== '') {
+        updateData.images = formData.images.split(',').map(img => img.trim()).filter(img => img !== '')
+      } else {
+        updateData.images = []
+      }
+
+      console.log('Enviando datos de actualización:', updateData)
+      
+      // Llamar a la API para actualizar en la base de datos
+      const updatedApartment = await updateApartment(editingApartment.id, updateData)
+      console.log('Apartamento actualizado exitosamente:', updatedApartment)
+      
+      handleCloseModal()
+      // Recargar lista de apartamentos para reflejar los cambios
+      await loadData()
+    } catch (error) {
+      console.error('Error updating apartment:', error)
+      const errorMessage = error.response?.data?.error || error.message || 'Error al actualizar apartamento'
+      alert(`Error: ${errorMessage}`)
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -236,7 +368,8 @@ const AdminDashboard = () => {
                           key={apt.id}
                           initial={{ opacity: 0, scale: 0.9 }}
                           animate={{ opacity: 1, scale: 1 }}
-                          className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow"
+                          className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow relative"
+                          onClick={(e) => e.stopPropagation()}
                         >
                           <h3 className="text-xl font-bold text-gray-800 mb-2">{apt.name}</h3>
                           <p className="text-gray-600 text-sm mb-4">{apt.city}</p>
@@ -248,14 +381,28 @@ const AdminDashboard = () => {
                               {apt.available ? 'Disponible' : 'No disponible'}
                             </span>
                           </div>
-                          <div className="flex space-x-2">
-                            <button className="flex-1 btn-secondary text-sm py-2">
+                          <div className="flex space-x-2 mt-4">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.preventDefault()
+                                e.stopPropagation()
+                                console.log('🖱️ Click en botón Editar para apartamento:', apt.id)
+                                handleEditApartment(apt)
+                              }}
+                              className="flex-1 btn-secondary text-sm py-2 cursor-pointer active:scale-95 transition-transform"
+                            >
                               <Edit className="w-4 h-4 inline mr-1" />
                               Editar
                             </button>
                             <button
-                              onClick={() => handleDeleteApartment(apt.id)}
-                              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                              type="button"
+                              onClick={(e) => {
+                                e.preventDefault()
+                                e.stopPropagation()
+                                handleDeleteApartment(apt.id)
+                              }}
+                              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors cursor-pointer active:scale-95"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -304,7 +451,7 @@ const AdminDashboard = () => {
                           Apt #{booking.apartment_id}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                          {format(new Date(booking.check_in), 'dd/MM/yyyy')} - {format(new Date(booking.check_out), 'dd/MM/yyyy')}
+                          {formatDate(booking.check_in)} - {formatDate(booking.check_out)}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                           ${booking.total_price?.toFixed(2) || '0.00'}
@@ -338,6 +485,287 @@ const AdminDashboard = () => {
           )}
         </motion.div>
       </div>
+
+      {/* Modal de Edición de Apartamento */}
+      <AnimatePresence>
+        {showModal && editingApartment && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={handleCloseModal}
+              className="fixed inset-0 bg-black bg-opacity-50 z-40"
+            />
+
+            {/* Modal */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="fixed inset-0 z-50 flex items-center justify-center p-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+                {/* Header */}
+                <div className="bg-gradient-to-r from-primary-600 to-primary-700 px-6 py-4 flex items-center justify-between">
+                  <h2 className="text-2xl font-bold text-white flex items-center">
+                    <Edit className="w-6 h-6 mr-2" />
+                    Editar Apartamento
+                  </h2>
+                  <button
+                    onClick={handleCloseModal}
+                    className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-2 transition-colors"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+
+                {/* Form */}
+                <form onSubmit={handleSaveApartment} className="flex-1 overflow-y-auto p-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Nombre */}
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Nombre del Apartamento *
+                      </label>
+                      <input
+                        type="text"
+                        name="name"
+                        value={formData.name || ''}
+                        onChange={handleFormChange}
+                        className={`input-field ${formErrors.name ? 'border-red-500' : ''}`}
+                        placeholder="Ej: Quadruple 1"
+                      />
+                      {formErrors.name && (
+                        <p className="text-red-500 text-xs mt-1">{formErrors.name}</p>
+                      )}
+                    </div>
+
+                    {/* Descripción */}
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Descripción
+                      </label>
+                      <textarea
+                        name="description"
+                        value={formData.description || ''}
+                        onChange={handleFormChange}
+                        rows="3"
+                        className={`input-field ${formErrors.description ? 'border-red-500' : ''}`}
+                        placeholder="Descripción del apartamento..."
+                      />
+                      {formErrors.description && (
+                        <p className="text-red-500 text-xs mt-1">{formErrors.description}</p>
+                      )}
+                    </div>
+
+                    {/* Dirección */}
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        <MapPin className="w-4 h-4 inline mr-1" />
+                        Dirección *
+                      </label>
+                      <input
+                        type="text"
+                        name="address"
+                        value={formData.address || ''}
+                        onChange={handleFormChange}
+                        className={`input-field ${formErrors.address ? 'border-red-500' : ''}`}
+                        placeholder="Calle y número"
+                      />
+                      {formErrors.address && (
+                        <p className="text-red-500 text-xs mt-1">{formErrors.address}</p>
+                      )}
+                    </div>
+
+                    {/* Ciudad */}
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        <MapPin className="w-4 h-4 inline mr-1" />
+                        Ciudad *
+                      </label>
+                      <input
+                        type="text"
+                        name="city"
+                        value={formData.city || ''}
+                        onChange={handleFormChange}
+                        className={`input-field ${formErrors.city ? 'border-red-500' : ''}`}
+                        placeholder="Buenos Aires"
+                      />
+                      {formErrors.city && (
+                        <p className="text-red-500 text-xs mt-1">{formErrors.city}</p>
+                      )}
+                    </div>
+
+                    {/* Huéspedes Máximos */}
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        <UsersIcon className="w-4 h-4 inline mr-1" />
+                        Huéspedes Máximos *
+                      </label>
+                      <input
+                        type="number"
+                        name="max_guests"
+                        value={formData.max_guests || ''}
+                        onChange={handleFormChange}
+                        min="1"
+                        className={`input-field ${formErrors.max_guests ? 'border-red-500' : ''}`}
+                      />
+                      {formErrors.max_guests && (
+                        <p className="text-red-500 text-xs mt-1">{formErrors.max_guests}</p>
+                      )}
+                    </div>
+
+                    {/* Habitaciones */}
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        <Bed className="w-4 h-4 inline mr-1" />
+                        Habitaciones *
+                      </label>
+                      <input
+                        type="number"
+                        name="bedrooms"
+                        value={formData.bedrooms || ''}
+                        onChange={handleFormChange}
+                        min="1"
+                        className={`input-field ${formErrors.bedrooms ? 'border-red-500' : ''}`}
+                      />
+                      {formErrors.bedrooms && (
+                        <p className="text-red-500 text-xs mt-1">{formErrors.bedrooms}</p>
+                      )}
+                    </div>
+
+                    {/* Baños */}
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        <Bath className="w-4 h-4 inline mr-1" />
+                        Baños *
+                      </label>
+                      <input
+                        type="number"
+                        name="bathrooms"
+                        value={formData.bathrooms || ''}
+                        onChange={handleFormChange}
+                        min="1"
+                        step="0.5"
+                        className={`input-field ${formErrors.bathrooms ? 'border-red-500' : ''}`}
+                      />
+                      {formErrors.bathrooms && (
+                        <p className="text-red-500 text-xs mt-1">{formErrors.bathrooms}</p>
+                      )}
+                    </div>
+
+                    {/* Precio por Noche */}
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        <DollarSign className="w-4 h-4 inline mr-1" />
+                        Precio por Noche *
+                      </label>
+                      <input
+                        type="number"
+                        name="price_per_night"
+                        value={formData.price_per_night || ''}
+                        onChange={handleFormChange}
+                        min="0"
+                        step="0.01"
+                        className={`input-field ${formErrors.price_per_night ? 'border-red-500' : ''}`}
+                      />
+                      {formErrors.price_per_night && (
+                        <p className="text-red-500 text-xs mt-1">{formErrors.price_per_night}</p>
+                      )}
+                    </div>
+
+                    {/* Disponible */}
+                    <div className="flex items-center pt-6">
+                      <label className="flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          name="available"
+                          checked={formData.available || false}
+                          onChange={handleFormChange}
+                          className="w-5 h-5 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                        />
+                        <span className="ml-2 text-sm font-semibold text-gray-700 flex items-center">
+                          <CheckCircle className="w-4 h-4 mr-1" />
+                          Disponible
+                        </span>
+                      </label>
+                    </div>
+
+                    {/* Amenities */}
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Amenities (separar por comas)
+                      </label>
+                      <input
+                        type="text"
+                        name="amenities"
+                        value={formData.amenities || ''}
+                        onChange={handleFormChange}
+                        className="input-field"
+                        placeholder="WiFi, TV, Aire acondicionado, Cocina"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Ejemplo: WiFi, TV, Aire acondicionado</p>
+                    </div>
+
+                    {/* Imágenes */}
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        <ImageIcon className="w-4 h-4 inline mr-1" />
+                        URLs de Imágenes (separar por comas)
+                      </label>
+                      <input
+                        type="text"
+                        name="images"
+                        value={formData.images || ''}
+                        onChange={handleFormChange}
+                        className="input-field"
+                        placeholder="https://ejemplo.com/imagen1.jpg, https://ejemplo.com/imagen2.jpg"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Ejemplo: https://ejemplo.com/imagen1.jpg, https://ejemplo.com/imagen2.jpg</p>
+                    </div>
+                  </div>
+
+                  {/* Botones */}
+                  <div className="flex justify-end space-x-4 mt-6 pt-6 border-t">
+                    <motion.button
+                      type="button"
+                      onClick={handleCloseModal}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      className="btn-secondary px-6"
+                      disabled={submitting}
+                    >
+                      Cancelar
+                    </motion.button>
+                    <motion.button
+                      type="submit"
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      disabled={submitting}
+                      className="btn-primary px-6 flex items-center"
+                    >
+                      {submitting ? (
+                        <>
+                          <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                          Guardando...
+                        </>
+                      ) : (
+                        <>
+                          <Save className="w-5 h-5 mr-2" />
+                          Guardar Cambios
+                        </>
+                      )}
+                    </motion.button>
+                  </div>
+                </form>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

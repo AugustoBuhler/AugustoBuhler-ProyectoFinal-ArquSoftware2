@@ -55,7 +55,7 @@ func (c *BookingController) CreateBooking(ctx *gin.Context) {
 		return
 	}
 
-	ctx.JSON(http.StatusCreated, booking)
+	ctx.JSON(http.StatusCreated, booking.ToBookingResponse())
 }
 
 func (c *BookingController) GetBookingByID(ctx *gin.Context) {
@@ -76,7 +76,7 @@ func (c *BookingController) GetBookingByID(ctx *gin.Context) {
 		return
 	}
 
-	ctx.JSON(http.StatusOK, booking)
+	ctx.JSON(http.StatusOK, booking.ToBookingResponse())
 }
 
 func (c *BookingController) GetBookingsByUserID(ctx *gin.Context) {
@@ -93,9 +93,15 @@ func (c *BookingController) GetBookingsByUserID(ctx *gin.Context) {
 		return
 	}
 
+	// Convertir bookings a BookingResponse con fechas formateadas
+	bookingResponses := make([]*domain.BookingResponse, len(bookings))
+	for i, b := range bookings {
+		bookingResponses[i] = b.ToBookingResponse()
+	}
+
 	ctx.JSON(http.StatusOK, gin.H{
-		"data":  bookings,
-		"total": len(bookings),
+		"data":  bookingResponses,
+		"total": len(bookingResponses),
 	})
 }
 
@@ -140,8 +146,14 @@ func (c *BookingController) GetAllBookings(ctx *gin.Context) {
 		return
 	}
 
+	// Convertir bookings a BookingResponse con fechas formateadas
+	bookingResponses := make([]*domain.BookingResponse, len(bookings))
+	for i, b := range bookings {
+		bookingResponses[i] = b.ToBookingResponse()
+	}
+
 	ctx.JSON(http.StatusOK, gin.H{
-		"data":       bookings,
+		"data":       bookingResponses,
 		"total":      total,
 		"page":       page,
 		"size":       size,
@@ -174,7 +186,7 @@ func (c *BookingController) UpdateBooking(ctx *gin.Context) {
 		return
 	}
 
-	ctx.JSON(http.StatusOK, booking)
+	ctx.JSON(http.StatusOK, booking.ToBookingResponse())
 }
 
 func (c *BookingController) DeleteBooking(ctx *gin.Context) {

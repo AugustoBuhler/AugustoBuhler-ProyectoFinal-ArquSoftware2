@@ -21,10 +21,10 @@ type BookingService interface {
 }
 
 type bookingService struct {
-	bookingRepo    repositories.BookingRepository
-	usersClient    repositories.UsersClient
+	bookingRepo      repositories.BookingRepository
+	usersClient      repositories.UsersClient
 	apartmentsClient repositories.ApartmentsClient
-	rmqClient      RabbitMQClient
+	rmqClient        RabbitMQClient
 }
 
 type RabbitMQClient interface {
@@ -47,16 +47,21 @@ func NewBookingService(
 
 // CreateBooking implementa cálculo concurrente usando goroutines, channels y WaitGroup
 func (s *bookingService) CreateBooking(ctx context.Context, req domain.CreateBookingRequest, isAdmin bool, adminUserID *int64) (*domain.Booking, error) {
-	// Parsear fechas
+	// Parsear fechas en UTC para evitar problemas de zona horaria
+	// time.Parse con layout "2006-01-02" crea fechas en UTC por defecto
 	checkIn, err := time.Parse("2006-01-02", req.CheckIn)
 	if err != nil {
 		return nil, fmt.Errorf("invalid check_in date format: %w", err)
 	}
+	// Asegurar que está en UTC
+	checkIn = checkIn.UTC()
 
 	checkOut, err := time.Parse("2006-01-02", req.CheckOut)
 	if err != nil {
 		return nil, fmt.Errorf("invalid check_out date format: %w", err)
 	}
+	// Asegurar que está en UTC
+	checkOut = checkOut.UTC()
 
 	if checkOut.Before(checkIn) || checkOut.Equal(checkIn) {
 		return nil, errors.New("check_out must be after check_in")
@@ -97,7 +102,7 @@ func (s *bookingService) CreateBooking(ctx context.Context, req domain.CreateBoo
 				// NO asignar este apartamento si hay error
 				continue
 			}
-			
+
 			// CRÍTICO: Solo asignar si available == true (sin reservas solapadas)
 			// Si available == false, significa que hay reservas que se solapan con las fechas solicitadas
 			if available {
@@ -230,54 +235,86 @@ func (s *bookingService) CreateBooking(ctx context.Context, req domain.CreateBoo
 	// Validar disponibilidad atómica (antes de crear la reserva)
 	// Esta verificación previene condiciones de carrera donde otro proceso pudo haber reservado
 	// el apartamento justo antes de que creemos esta reserva
-	available, err := s.bookingRepo.CheckAvailability(ctx, apartmentID, checkIn, checkOut, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to check availability: %w", err)
-	}
-	
-	// Si no está disponible Y buscamos por tipo, intentar buscar otro apartamento del mismo tipo
-	if !available && req.ApartmentType != "" {
-		// Guardar el ID del apartamento que no está disponible
-		unavailableApartmentID := apartmentID
-		
-		// Reintentar buscar otro apartamento disponible del mismo tipo
-		allApartments, err := s.apartmentsClient.GetAllApartmentsByType(req.ApartmentType)
-		if err == nil && len(allApartments) > 0 {
+	// Si estamos buscando por tipo, intentar hasta encontrar uno disponible o agotar las opciones
+	maxRetries := 5 // Máximo de intentos para encontrar un apartamento disponible del tipo
+	retryCount := 0
+
+	for {
+		available, err := s.bookingRepo.CheckAvailability(ctx, apartmentID, checkIn, checkOut, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to check availability: %w", err)
+		}
+
+		// Si está disponible, salir del bucle de reintentos
+		if available {
+			break
+		}
+
+		// Si no está disponible Y buscamos por tipo, intentar buscar otro apartamento del mismo tipo
+		if !available && req.ApartmentType != "" {
+			// Guardar el ID del apartamento que no está disponible
+			unavailableApartmentID := apartmentID
+			alreadyTried := make(map[int64]bool)
+			alreadyTried[unavailableApartmentID] = true
+
+			// Reintentar buscar otro apartamento disponible del mismo tipo
+			allApartments, err := s.apartmentsClient.GetAllApartmentsByType(req.ApartmentType)
+			if err != nil || len(allApartments) == 0 {
+				return nil, fmt.Errorf("no apartments of type %s available for the requested date range (all are booked)", req.ApartmentType)
+			}
+
 			// Intentar encontrar otro apartamento del tipo que esté disponible
 			foundAlternative := false
 			for _, apt := range allApartments {
-				if apt.ID == unavailableApartmentID {
-					continue // Saltar el que ya verificamos y no está disponible
+				// Saltar apartamentos que ya intentamos
+				if alreadyTried[apt.ID] {
+					continue
 				}
+
+				// Verificar que tenga capacidad suficiente
 				if apt.MaxGuests < req.Guests {
-					continue // Saltar si no tiene capacidad suficiente
+					continue
 				}
-				
+
 				// Verificar disponibilidad del siguiente apartamento
 				altAvailable, err := s.bookingRepo.CheckAvailability(ctx, apt.ID, checkIn, checkOut, nil)
-				if err == nil && altAvailable {
+				if err != nil {
+					// Si hay error, continuar con el siguiente
+					continue
+				}
+
+				if altAvailable {
 					// ¡Encontramos otro disponible! Actualizar referencias
 					apartmentID = apt.ID
 					apartment = apt
 					totalPrice = float64(days) * apt.PricePerNight
 					foundAlternative = true
-					// Salir del bucle, usar este apartamento
+					// Marcar como intentado y salir del bucle para intentar con este
+					alreadyTried[apt.ID] = true
 					break
 				}
 			}
-			
+
 			if !foundAlternative {
 				// No encontramos otro disponible, retornar error
 				return nil, fmt.Errorf("no apartments of type %s available for the requested date range (all are booked)", req.ApartmentType)
 			}
-			// Si encontramos uno alternativo, continuar con la creación de la reserva
-		} else {
-			// No se pudo buscar otros apartamentos, retornar error
+
+			// Incrementar contador de reintentos
+			retryCount++
+			if retryCount >= maxRetries {
+				return nil, fmt.Errorf("no apartments of type %s available for the requested date range (max retries reached)", req.ApartmentType)
+			}
+
+			// Continuar el bucle para verificar disponibilidad atómica del nuevo apartamento
+			continue
+		} else if !available {
+			// Si no buscamos por tipo o no hay más apartamentos del tipo, retornar error
 			return nil, errors.New("apartment is not available for the requested date range")
 		}
-	} else if !available {
-		// Si no buscamos por tipo o no hay más apartamentos del tipo, retornar error
-		return nil, errors.New("apartment is not available for the requested date range")
+
+		// Si llegamos aquí y no estamos en modo tipo, salir
+		break
 	}
 
 	// Validar datos del huésped
@@ -373,7 +410,7 @@ func (s *bookingService) UpdateBooking(ctx context.Context, id int64, req domain
 		if err != nil {
 			return nil, fmt.Errorf("invalid check_in date format: %w", err)
 		}
-		checkIn = parsed
+		checkIn = parsed.UTC() // Asegurar que está en UTC
 	}
 
 	if req.CheckOut != nil {
@@ -381,7 +418,7 @@ func (s *bookingService) UpdateBooking(ctx context.Context, id int64, req domain
 		if err != nil {
 			return nil, fmt.Errorf("invalid check_out date format: %w", err)
 		}
-		checkOut = parsed
+		checkOut = parsed.UTC() // Asegurar que está en UTC
 	}
 
 	if req.Guests != nil {
@@ -451,4 +488,3 @@ func (s *bookingService) DeleteBooking(ctx context.Context, id int64) error {
 
 	return nil
 }
-

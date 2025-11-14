@@ -29,14 +29,14 @@ Content-Type: application/json
 {
   "apartment_type": "double_matrimonial",
   "user_info": {
-    "first_name": "Valeria",
-    "last_name": "Ulises",
-    "dni": "23677332",
-    "phone": "+5491179234299",
-    "email": "valeria.ulises@example.com"
+    "first_name": "Laura",
+    "last_name": "Bueno",
+    "dni": "23677333",
+    "phone": "+5491179232222",
+    "email": "laura.bueno@example.com"
   },
-  "check_in": "2026-01-28",
-  "check_out": "2026-01-29",
+  "check_in": "2026-02-10",
+  "check_out": "2026-02-15",
   "guests": 2,
   "payment_method": "transferencia"
 }
@@ -46,17 +46,17 @@ POST {{baseUrl}}/bookings
 Content-Type: application/json
 
 {
-  "apartment_id": 17,
+  "apartment_id": 4,
   "user_id": 1,
   "user_info": {
-    "first_name": "Angie",
-    "last_name": "Yunes",
-    "dni": "46987432",
-    "phone": "+5491198765110",
-    "email": "angie.yunes@example.com"
+    "first_name": "Octavio",
+    "last_name": "Buhler",
+    "dni": "480983218",
+    "phone": "+5491198765999",
+    "email": "octavio.buhler@example.com"
   },
-  "check_in": "2026-01-05",
-  "check_out": "2026-01-10",
+  "check_in": "2026-01-20",
+  "check_out": "2026-01-23",
   "guests": 2,
   "payment_method": "transferencia"
 }

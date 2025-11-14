@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { CheckCircle, Calendar, MapPin, Users, DollarSign } from 'lucide-react'
 import { getBookingById } from '../services/api'
-import { format } from 'date-fns'
+import { formatDate } from '../utils/dateUtils'
 
 const ConfirmationPage = () => {
   const { bookingId } = useParams()
@@ -13,7 +13,14 @@ const ConfirmationPage = () => {
   useEffect(() => {
     const loadBooking = async () => {
       try {
+        // Obtener datos de la reserva directamente desde la API (base de datos)
         const data = await getBookingById(bookingId)
+        console.log('🔍 Booking data recibida del backend:', {
+          check_in: data.check_in,
+          check_out: data.check_out,
+          check_in_type: typeof data.check_in,
+          check_out_type: typeof data.check_out
+        })
         setBooking(data)
       } catch (error) {
         console.error('Error loading booking:', error)
@@ -82,7 +89,7 @@ const ConfirmationPage = () => {
             <div>
               <p className="text-sm text-gray-600">Check-in</p>
               <p className="font-semibold text-gray-800">
-                {format(new Date(booking.check_in), 'dd/MM/yyyy')}
+                {formatDate(booking.check_in)}
               </p>
             </div>
           </div>
@@ -91,7 +98,7 @@ const ConfirmationPage = () => {
             <div>
               <p className="text-sm text-gray-600">Check-out</p>
               <p className="font-semibold text-gray-800">
-                {format(new Date(booking.check_out), 'dd/MM/yyyy')}
+                {formatDate(booking.check_out)}
               </p>
             </div>
           </div>

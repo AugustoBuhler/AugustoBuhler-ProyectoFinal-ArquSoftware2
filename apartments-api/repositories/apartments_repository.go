@@ -105,8 +105,25 @@ func (r *apartmentRepository) GetAll(ctx context.Context, filters map[string]int
 
 func (r *apartmentRepository) Update(ctx context.Context, id int64, apartment *domain.Apartment) error {
 	apartment.UpdatedAt = time.Now()
+	
+	// Construir update con todos los campos del apartamento
+	// Esto asegura que TODOS los campos se actualicen correctamente en MongoDB
 	update := bson.M{
-		"$set": apartment,
+		"$set": bson.M{
+			"name":            apartment.Name,
+			"description":     apartment.Description,
+			"address":         apartment.Address,
+			"city":            apartment.City,
+			"max_guests":      apartment.MaxGuests,
+			"bedrooms":        apartment.Bedrooms,
+			"bathrooms":       apartment.Bathrooms,
+			"amenities":       apartment.Amenities,
+			"price_per_night": apartment.PricePerNight,
+			"images":          apartment.Images,
+			"available":       apartment.Available,
+			"updated_at":      apartment.UpdatedAt,
+			// No actualizar created_at, id, owner_id
+		},
 	}
 	
 	result, err := r.collection.UpdateOne(ctx, bson.M{"id": id}, update)
@@ -115,6 +132,10 @@ func (r *apartmentRepository) Update(ctx context.Context, id int64, apartment *d
 	}
 	if result.MatchedCount == 0 {
 		return errors.New("apartment not found")
+	}
+	if result.ModifiedCount == 0 && result.MatchedCount > 0 {
+		// Documento encontrado pero no modificado (posiblemente los datos son iguales)
+		// Esto no es un error, así que retornamos nil
 	}
 	return nil
 }
