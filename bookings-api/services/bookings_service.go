@@ -4,12 +4,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"sync"
 	"time"
 
 	"bookings-api/domain"
 	"bookings-api/repositories"
 )
+
+// calculateDeposit calcula la seña anticipada (30% del total, redondeado a 2 decimales)
+func calculateDeposit(totalPrice float64) float64 {
+	return math.Round(totalPrice*0.30*100) / 100
+}
 
 type BookingService interface {
 	CreateBooking(ctx context.Context, req domain.CreateBookingRequest, isAdmin bool, adminUserID *int64) (*domain.Booking, error)
@@ -18,6 +24,10 @@ type BookingService interface {
 	GetAllBookings(ctx context.Context, filters map[string]interface{}, page, size int) ([]*domain.Booking, int64, error)
 	UpdateBooking(ctx context.Context, id int64, req domain.UpdateBookingRequest) (*domain.Booking, error)
 	DeleteBooking(ctx context.Context, id int64) error
+	CompleteBooking(ctx context.Context, id int64) (*domain.Booking, error)
+	CancelBooking(ctx context.Context, id int64) (*domain.Booking, error)
+	MarkAsPaid(ctx context.Context, id int64, dollarRate float64) (*domain.Booking, error)
+	MarkExpiredBookingsAsCompleted(ctx context.Context) (int, error)
 }
 
 type bookingService struct {
@@ -25,6 +35,7 @@ type bookingService struct {
 	usersClient      repositories.UsersClient
 	apartmentsClient repositories.ApartmentsClient
 	rmqClient        RabbitMQClient
+	financeRepo      repositories.FinanceRepository
 }
 
 type RabbitMQClient interface {
@@ -36,12 +47,14 @@ func NewBookingService(
 	usersClient repositories.UsersClient,
 	apartmentsClient repositories.ApartmentsClient,
 	rmqClient RabbitMQClient,
+	financeRepo repositories.FinanceRepository,
 ) BookingService {
 	return &bookingService{
 		bookingRepo:      bookingRepo,
 		usersClient:      usersClient,
 		apartmentsClient: apartmentsClient,
 		rmqClient:        rmqClient,
+		financeRepo:      financeRepo,
 	}
 }
 
@@ -69,6 +82,13 @@ func (s *bookingService) CreateBooking(ctx context.Context, req domain.CreateBoo
 
 	if checkOut.Before(checkIn) || checkOut.Equal(checkIn) {
 		return nil, errors.New("check_out must be after check_in")
+	}
+
+	// check_in no puede ser en el pasado (comparar solo fechas, sin hora)
+	now := time.Now().UTC()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+	if checkIn.Before(today) {
+		return nil, errors.New("check_in cannot be in the past")
 	}
 
 	// Determinar apartment_id antes de las goroutines
@@ -344,8 +364,9 @@ func (s *bookingService) CreateBooking(ctx context.Context, req domain.CreateBoo
 		CheckOut:       checkOut,
 		Guests:         req.Guests,
 		TotalPrice:     totalPrice,
+		DepositAmount:  calculateDeposit(totalPrice),
 		PaymentMethod:  req.PaymentMethod,
-		Status:         "confirmed",
+		Status:         "reservada",
 		CreatedByAdmin: isAdmin,
 		AdminUserID:    adminUserID,
 	}
@@ -399,47 +420,67 @@ func (s *bookingService) GetAllBookings(ctx context.Context, filters map[string]
 }
 
 func (s *bookingService) UpdateBooking(ctx context.Context, id int64, req domain.UpdateBookingRequest) (*domain.Booking, error) {
-	// Obtener reserva existente
 	booking, err := s.bookingRepo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 
+	// Campos simples
+	if req.Guests != nil {
+		booking.Guests = *req.Guests
+	}
+	if req.Status != nil {
+		booking.Status = *req.Status
+	}
+	if req.PaymentMethod != nil {
+		booking.PaymentMethod = *req.PaymentMethod
+	}
+	if req.GuestInfo != nil {
+		booking.GuestInfo = *req.GuestInfo
+		booking.GuestInfo.ID = req.GuestInfo.DNI
+	}
+
+	// Cambio de apartamento
+	if req.ApartmentID != nil && *req.ApartmentID != booking.ApartmentID {
+		apt, err := s.apartmentsClient.GetApartmentByID(*req.ApartmentID)
+		if err != nil {
+			return nil, errors.New("apartment not found")
+		}
+		available, err := s.bookingRepo.CheckAvailability(ctx, *req.ApartmentID, booking.CheckIn, booking.CheckOut, &booking.ID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to check availability: %w", err)
+		}
+		if !available {
+			return nil, errors.New("apartment is not available for the requested date range")
+		}
+		booking.ApartmentID = *req.ApartmentID
+		// Recalcular precio con el nuevo apartamento salvo que venga un precio manual
+		if req.TotalPrice == nil {
+			days := int(booking.CheckOut.Sub(booking.CheckIn).Hours() / 24)
+			if days < 1 {
+				days = 1
+			}
+			booking.TotalPrice = float64(days) * apt.PricePerNight
+		}
+	}
+
+	// Cambio de fechas
 	checkIn := booking.CheckIn
 	checkOut := booking.CheckOut
-
-	// Actualizar campos si se proporcionan
 	if req.CheckIn != nil {
 		parsed, err := time.Parse("2006-01-02", *req.CheckIn)
 		if err != nil {
 			return nil, fmt.Errorf("invalid check_in date format: %w", err)
 		}
-		// Construir fecha explícitamente en UTC usando los componentes extraídos
 		checkIn = time.Date(parsed.Year(), parsed.Month(), parsed.Day(), 0, 0, 0, 0, time.UTC)
 	}
-
 	if req.CheckOut != nil {
 		parsed, err := time.Parse("2006-01-02", *req.CheckOut)
 		if err != nil {
 			return nil, fmt.Errorf("invalid check_out date format: %w", err)
 		}
-		// Construir fecha explícitamente en UTC usando los componentes extraídos
 		checkOut = time.Date(parsed.Year(), parsed.Month(), parsed.Day(), 0, 0, 0, 0, time.UTC)
 	}
-
-	if req.Guests != nil {
-		booking.Guests = *req.Guests
-	}
-
-	if req.Status != nil {
-		booking.Status = *req.Status
-	}
-
-	if req.PaymentMethod != nil {
-		booking.PaymentMethod = *req.PaymentMethod
-	}
-
-	// Si cambian las fechas, validar disponibilidad
 	if req.CheckIn != nil || req.CheckOut != nil {
 		available, err := s.bookingRepo.CheckAvailability(ctx, booking.ApartmentID, checkIn, checkOut, &booking.ID)
 		if err != nil {
@@ -450,15 +491,36 @@ func (s *bookingService) UpdateBooking(ctx context.Context, id int64, req domain
 		}
 		booking.CheckIn = checkIn
 		booking.CheckOut = checkOut
-
-		// Recalcular precio si cambian las fechas
-		apartment, err := s.apartmentsClient.GetApartmentByID(booking.ApartmentID)
-		if err == nil {
-			days := int(checkOut.Sub(checkIn).Hours() / 24)
-			if days < 1 {
-				days = 1
+		// Recalcular precio por las nuevas fechas salvo que venga un precio manual
+		if req.TotalPrice == nil {
+			apartment, err := s.apartmentsClient.GetApartmentByID(booking.ApartmentID)
+			if err == nil {
+				days := int(checkOut.Sub(checkIn).Hours() / 24)
+				if days < 1 {
+					days = 1
+				}
+				booking.TotalPrice = float64(days) * apartment.PricePerNight
 			}
-			booking.TotalPrice = float64(days) * apartment.PricePerNight
+		}
+	}
+
+	// Precio manual (siempre tiene la última palabra)
+	if req.TotalPrice != nil {
+		booking.TotalPrice = *req.TotalPrice
+	}
+
+	// Recalcular seña anticipada cada vez que cambia el precio total
+	booking.DepositAmount = calculateDeposit(booking.TotalPrice)
+
+	// Sincronizar montos USD para reservas pagadas
+	if booking.Status == "pagado" {
+		if req.USDAmount != nil {
+			// El admin editó USD manualmente → tiene precedencia absoluta
+			booking.USDAmount = req.USDAmount
+		} else if booking.ExchangeRateUsed != nil && *booking.ExchangeRateUsed > 0 {
+			// Recalcular USD usando el tipo de cambio registrado al momento del pago
+			recalculated := booking.TotalPrice / *booking.ExchangeRateUsed
+			booking.USDAmount = &recalculated
 		}
 	}
 
@@ -467,9 +529,8 @@ func (s *bookingService) UpdateBooking(ctx context.Context, id int64, req domain
 		return nil, err
 	}
 
-	// Publicar evento a RabbitMQ
 	if err := s.rmqClient.PublishBookingEvent("updated", booking.ID); err != nil {
-		// Log error pero no fallar la actualización
+		// log pero no falla
 	}
 
 	return booking, nil
@@ -493,4 +554,189 @@ func (s *bookingService) DeleteBooking(ctx context.Context, id int64) error {
 	}
 
 	return nil
+}
+
+// CompleteBooking marca una reserva "pagado" como "finalizada" si su fecha de check_out ya pasó
+func (s *bookingService) CompleteBooking(ctx context.Context, id int64) (*domain.Booking, error) {
+	// Obtener la reserva
+	booking, err := s.bookingRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	// Solo las reservas pagadas pueden finalizarse
+	if booking.Status != "pagado" {
+		return nil, fmt.Errorf("booking must be in 'pagado' status to be finalized, current status: %s", booking.Status)
+	}
+
+	// Verificar que la fecha de check_out ya pasó
+	now := time.Now().UTC()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+	checkOutUTC := booking.CheckOut.UTC()
+	checkOutDate := time.Date(checkOutUTC.Year(), checkOutUTC.Month(), checkOutUTC.Day(), 0, 0, 0, 0, time.UTC)
+
+	if !checkOutDate.Before(today) {
+		return nil, fmt.Errorf("booking check-out date (%s) has not passed yet", checkOutDate.Format("2006-01-02"))
+	}
+
+	// Actualizar estado a "finalizada"
+	err = s.bookingRepo.UpdateStatus(ctx, id, "finalizada")
+	if err != nil {
+		return nil, err
+	}
+
+	// Obtener la reserva actualizada
+	updatedBooking, err := s.bookingRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	// Publicar evento a RabbitMQ
+	if err := s.rmqClient.PublishBookingEvent("updated", updatedBooking.ID); err != nil {
+		// Log error pero no fallar la actualización
+	}
+
+	return updatedBooking, nil
+}
+
+// CancelBooking marca una reserva como "cancelled" (solo para admin)
+func (s *bookingService) CancelBooking(ctx context.Context, id int64) (*domain.Booking, error) {
+	// Obtener la reserva
+	booking, err := s.bookingRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	// Verificar que no esté ya cancelada
+	if booking.Status == "cancelada" {
+		return nil, fmt.Errorf("booking is already cancelled")
+	}
+
+	// No se puede cancelar una reserva ya finalizada
+	if booking.Status == "finalizada" {
+		return nil, fmt.Errorf("cannot cancel a finalized booking")
+	}
+
+	// Actualizar estado a "cancelada"
+	err = s.bookingRepo.UpdateStatus(ctx, id, "cancelada")
+	if err != nil {
+		return nil, err
+	}
+
+	// Obtener la reserva actualizada
+	updatedBooking, err := s.bookingRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	// Publicar evento a RabbitMQ
+	if err := s.rmqClient.PublishBookingEvent("updated", updatedBooking.ID); err != nil {
+		// Log error pero no fallar la actualización
+	}
+
+	return updatedBooking, nil
+}
+
+// MarkAsPaid marca una reserva como "pagado" y registra el pago completo en MySQL
+func (s *bookingService) MarkAsPaid(ctx context.Context, id int64, dollarRate float64) (*domain.Booking, error) {
+	booking, err := s.bookingRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if booking.Status == "pagado" {
+		return nil, errors.New("booking is already marked as paid")
+	}
+	if booking.Status == "cancelada" {
+		return nil, errors.New("cannot mark a cancelled booking as paid")
+	}
+	if booking.Status == "finalizada" {
+		return nil, errors.New("cannot mark a finalized booking as paid")
+	}
+
+	if dollarRate <= 0 {
+		return nil, errors.New("dollar rate must be configured before marking a booking as paid")
+	}
+
+	// Obtener el registro de tipo de cambio actual de MySQL (necesitamos su ID para el FK)
+	rateRec, err := s.financeRepo.GetCurrentDollarRate(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get current dollar rate: %w", err)
+	}
+	if rateRec == nil {
+		return nil, errors.New("no dollar rate configured, please set it first from the admin panel")
+	}
+
+	usdAmount := booking.TotalPrice / rateRec.Rate
+	now := time.Now().UTC()
+
+	// Marcar como pagado en MongoDB
+	if err := s.bookingRepo.MarkAsPaid(ctx, id, usdAmount, rateRec.Rate, now); err != nil {
+		return nil, err
+	}
+
+	// Registrar el pago completo en MySQL con todos los datos relacionales
+	paymentMethod := booking.PaymentMethod
+	if paymentMethod == "" {
+		paymentMethod = "transferencia"
+	}
+	if err := s.financeRepo.CreatePayment(ctx, repositories.CreatePaymentInput{
+		BookingID:      booking.ID,
+		ApartmentID:    booking.ApartmentID,
+		GuestFirstName: booking.GuestInfo.FirstName,
+		GuestLastName:  booking.GuestInfo.LastName,
+		GuestDNI:       booking.GuestInfo.DNI,
+		GuestEmail:     booking.GuestInfo.Email,
+		GuestPhone:     booking.GuestInfo.Phone,
+		CheckIn:        booking.CheckIn,
+		CheckOut:       booking.CheckOut,
+		AmountARS:      booking.TotalPrice,
+		AmountUSD:      usdAmount,
+		ExchangeRateID: rateRec.ID,
+		ExchangeRate:   rateRec.Rate,
+		PaymentMethod:  paymentMethod,
+		PaidAt:         now,
+	}); err != nil {
+		// Loguear error pero no revertir — el estado en MongoDB ya fue actualizado
+		// En producción esto requeriría una transacción distribuida o saga pattern
+		fmt.Printf("[MarkAsPaid] warning: failed to record payment in MySQL: %v\n", err)
+	}
+
+	updated, err := s.bookingRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.rmqClient.PublishBookingEvent("updated", updated.ID); err != nil {
+		// log but don't fail
+	}
+
+	return updated, nil
+}
+
+// MarkExpiredBookingsAsCompleted marca automáticamente las reservas pagadas vencidas como "finalizada"
+func (s *bookingService) MarkExpiredBookingsAsCompleted(ctx context.Context) (int, error) {
+	// Obtener todas las reservas PAGADAS cuyo check_out ya pasó
+	expiredBookings, err := s.bookingRepo.GetExpiredPaidBookings(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	// Marcar cada una como "finalizada"
+	completedCount := 0
+	for _, booking := range expiredBookings {
+		err := s.bookingRepo.UpdateStatus(ctx, booking.ID, "finalizada")
+		if err != nil {
+			// Continuar con las siguientes aunque falle una
+			continue
+		}
+		completedCount++
+
+		// Publicar evento a RabbitMQ
+		if err := s.rmqClient.PublishBookingEvent("updated", booking.ID); err != nil {
+			// Log error pero continuar
+		}
+	}
+
+	return completedCount, nil
 }

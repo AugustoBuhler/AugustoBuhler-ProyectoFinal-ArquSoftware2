@@ -10,6 +10,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+type markAsPaidRequest struct {
+	DollarRate float64 `json:"dollar_rate" binding:"required,gt=0"`
+}
+
 type BookingController struct {
 	bookingService services.BookingService
 }
@@ -208,5 +212,93 @@ func (c *BookingController) DeleteBooking(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{"message": "booking deleted successfully"})
+}
+
+// CompleteBooking marca una reserva como concluida si su fecha de check-out ya pasó
+func (c *BookingController) CompleteBooking(ctx *gin.Context) {
+	idParam := ctx.Param("id")
+	id, err := strconv.ParseInt(idParam, 10, 64)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid booking id"})
+		return
+	}
+
+	booking, err := c.bookingService.CompleteBooking(ctx.Request.Context(), id)
+	if err != nil {
+		if err.Error() == "booking not found" {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": "booking not found"})
+			return
+		}
+		// Errores de validación (no está confirmada, fecha no pasó)
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, booking.ToBookingResponse())
+}
+
+// CancelBooking marca una reserva como cancelada (solo para admin)
+func (c *BookingController) CancelBooking(ctx *gin.Context) {
+	idParam := ctx.Param("id")
+	id, err := strconv.ParseInt(idParam, 10, 64)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid booking id"})
+		return
+	}
+
+	booking, err := c.bookingService.CancelBooking(ctx.Request.Context(), id)
+	if err != nil {
+		if err.Error() == "booking not found" {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": "booking not found"})
+			return
+		}
+		// Errores de validación (ya cancelada, ya concluida)
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, booking.ToBookingResponse())
+}
+
+// MarkAsPaid marca una reserva como "pagado" usando el tipo de cambio configurado
+func (c *BookingController) MarkAsPaid(ctx *gin.Context) {
+	idParam := ctx.Param("id")
+	id, err := strconv.ParseInt(idParam, 10, 64)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid booking id"})
+		return
+	}
+
+	var req markAsPaidRequest
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "dollar_rate is required and must be positive"})
+		return
+	}
+
+	booking, err := c.bookingService.MarkAsPaid(ctx.Request.Context(), id, req.DollarRate)
+	if err != nil {
+		if err.Error() == "booking not found" {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		}
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, booking.ToBookingResponse())
+}
+
+// MarkExpiredBookingsAsCompleted marca automáticamente todas las reservas vencidas como concluidas
+func (c *BookingController) MarkExpiredBookingsAsCompleted(ctx *gin.Context) {
+	completedCount, err := c.bookingService.MarkExpiredBookingsAsCompleted(ctx.Request.Context())
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"message":         "expired bookings marked as completed",
+		"completed_count": completedCount,
+	})
 }
 

@@ -2,25 +2,38 @@ import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Users, DollarSign } from 'lucide-react'
 
+const TYPE_IMAGES = {
+  quadruple: 'https://images.unsplash.com/photo-1560185007-cde436f6a4d0?w=600&q=80',
+  triple: 'https://images.unsplash.com/photo-1595576508898-0ad5c879a061?w=600&q=80',
+  double_matrimonial: 'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=600&q=80',
+  double_twin: 'https://images.unsplash.com/photo-1540518614846-7eded433c457?w=600&q=80',
+}
+
 const ApartmentTypeCard = ({ type, index }) => {
+  const image = TYPE_IMAGES[type.type]
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay: index * 0.1 }}
       whileHover={{ y: -5 }}
-      className="card"
+      className="card border border-gray-100 overflow-hidden"
     >
       <Link to={`/booking?type=${type.type}`}>
-        <div className="relative h-64 bg-gradient-to-br from-primary-400 to-primary-600 overflow-hidden">
-          <div className="w-full h-full flex items-center justify-center text-white text-6xl">
-            {type.type === 'quadruple' && '🏠'}
-            {type.type === 'triple' && '🏡'}
-            {type.type === 'double_matrimonial' && '💑'}
-            {type.type === 'double_twin' && '👥'}
-          </div>
+        <div className="relative h-56 overflow-hidden bg-gray-200">
+          {image ? (
+            <img
+              src={image}
+              alt={type.name}
+              className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
+            />
+          ) : (
+            <div className="w-full h-full bg-gradient-to-br from-primary-400 to-primary-600" />
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
           {type.available && (
-            <div className="absolute top-2 right-2 bg-green-500 text-white px-3 py-1 rounded-full text-xs font-semibold">
+            <div className="absolute top-3 right-3 bg-green-500 text-white px-3 py-1 rounded-full text-xs font-semibold shadow">
               {type.count} disponibles
             </div>
           )}

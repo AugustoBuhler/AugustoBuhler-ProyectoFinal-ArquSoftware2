@@ -184,6 +184,25 @@ services:
       - app-network
     restart: unless-stopped
 
+  notifications-api:
+    build:
+      context: ./notifications-api
+      dockerfile: Dockerfile
+    container_name: notifications-api
+    environment:
+      - RABBITMQ_URL=amqp://admin:admin@rabbitmq:5672/
+      - BOOKINGS_API_URL=http://bookings-api:8082
+      - RESEND_API_KEY=${RESEND_API_KEY:-}
+      - FROM_EMAIL=${FROM_EMAIL:-Reservas <onboarding@resend.dev>}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      bookings-api:
+        condition: service_started
+    networks:
+      - app-network
+    restart: unless-stopped
+
   # Frontend
   frontend:
     build:

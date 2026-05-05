@@ -19,9 +19,12 @@ type BookingRepository interface {
 	GetAll(ctx context.Context, filters map[string]interface{}, skip, limit int64) ([]*domain.Booking, error)
 	Count(ctx context.Context, filters map[string]interface{}) (int64, error)
 	Update(ctx context.Context, id int64, booking *domain.Booking) error
+	UpdateStatus(ctx context.Context, id int64, status string) error
 	Delete(ctx context.Context, id int64) error
 	CheckAvailability(ctx context.Context, apartmentID int64, checkIn, checkOut time.Time, excludeBookingID *int64) (bool, error)
 	GetNextID(ctx context.Context) (int64, error)
+	GetExpiredPaidBookings(ctx context.Context) ([]*domain.Booking, error)
+	MarkAsPaid(ctx context.Context, id int64, usdAmount float64, exchangeRate float64, paidAt time.Time) error
 }
 
 type bookingRepository struct {
@@ -212,9 +215,9 @@ func (r *bookingRepository) CheckAvailability(ctx context.Context, apartmentID i
 	// En MongoDB, múltiples condiciones en el mismo nivel se evalúan con AND implícito
 	filter := bson.M{
 		"apartment_id": apartmentID,
-		"status":       bson.M{"$ne": "cancelled"}, // Excluir reservas canceladas
-		"check_in":     bson.M{"$lt": checkOut},    // existing.check_in < requested.check_out
-		"check_out":    bson.M{"$gt": checkIn},     // existing.check_out > requested.check_in
+		"status":       bson.M{"$nin": []string{"cancelled", "cancelada", "concluida", "finalizada"}},
+		"check_in":     bson.M{"$lt": checkOut},                            // existing.check_in < requested.check_out
+		"check_out":    bson.M{"$gt": checkIn},                             // existing.check_out > requested.check_in
 	}
 
 	// Excluir la reserva actual si se está actualizando
@@ -229,5 +232,83 @@ func (r *bookingRepository) CheckAvailability(ctx context.Context, apartmentID i
 
 	// Si count == 0, el apartamento está disponible
 	return count == 0, nil
+}
+
+// UpdateStatus actualiza solo el estado de una reserva
+func (r *bookingRepository) UpdateStatus(ctx context.Context, id int64, status string) error {
+	update := bson.M{
+		"$set": bson.M{
+			"status":     status,
+			"updated_at": time.Now(),
+		},
+	}
+
+	result, err := r.collection.UpdateOne(ctx, bson.M{"id": id}, update)
+	if err != nil {
+		return err
+	}
+	if result.MatchedCount == 0 {
+		return errors.New("booking not found")
+	}
+	return nil
+}
+
+// MarkAsPaid actualiza el estado a "pagado" y almacena el monto en USD y el tipo de cambio usado
+func (r *bookingRepository) MarkAsPaid(ctx context.Context, id int64, usdAmount float64, exchangeRate float64, paidAt time.Time) error {
+	update := bson.M{
+		"$set": bson.M{
+			"status":             "pagado",
+			"usd_amount":         usdAmount,
+			"exchange_rate_used": exchangeRate,
+			"paid_at":            paidAt,
+			"updated_at":         time.Now(),
+		},
+	}
+	result, err := r.collection.UpdateOne(ctx, bson.M{"id": id}, update)
+	if err != nil {
+		return err
+	}
+	if result.MatchedCount == 0 {
+		return errors.New("booking not found")
+	}
+	return nil
+}
+
+// GetExpiredPaidBookings obtiene todas las reservas pagadas cuyo check_out ya pasó
+func (r *bookingRepository) GetExpiredPaidBookings(ctx context.Context) ([]*domain.Booking, error) {
+	now := time.Now().UTC()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+
+	filter := bson.M{
+		"status":    "pagado",
+		"check_out": bson.M{"$lt": today},
+	}
+
+	cursor, err := r.collection.Find(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var bookings []*domain.Booking
+	if err = cursor.All(ctx, &bookings); err != nil {
+		return nil, err
+	}
+
+	// Asegurar que todas las fechas estén en UTC
+	for i := range bookings {
+		if !bookings[i].CheckIn.IsZero() {
+			utcTime := bookings[i].CheckIn.UTC()
+			year, month, day := utcTime.Year(), utcTime.Month(), utcTime.Day()
+			bookings[i].CheckIn = time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
+		}
+		if !bookings[i].CheckOut.IsZero() {
+			utcTime := bookings[i].CheckOut.UTC()
+			year, month, day := utcTime.Year(), utcTime.Month(), utcTime.Day()
+			bookings[i].CheckOut = time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
+		}
+	}
+
+	return bookings, nil
 }
 

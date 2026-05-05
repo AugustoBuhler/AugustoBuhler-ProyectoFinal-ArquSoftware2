@@ -87,6 +87,18 @@ export const getAllBookings = async () => {
   }
 }
 
+// Obtener reservas filtradas por estado (opcional)
+export const getBookingsByStatus = async (status) => {
+  try {
+    const params = status ? { status, size: 1000 } : { size: 1000 }
+    const response = await bookingsAPI.get('/bookings', { params })
+    return response.data
+  } catch (error) {
+    console.error('Error fetching bookings by status:', error)
+    return { data: [], total: 0 }
+  }
+}
+
 export const getBookingById = async (id) => {
   const response = await bookingsAPI.get(`/bookings/${id}`)
   return response.data
@@ -105,5 +117,64 @@ export const updateBooking = async (id, bookingData) => {
 export const deleteBooking = async (id) => {
   const response = await bookingsAPI.delete(`/bookings/${id}`)
   return response.data
+}
+
+// Marcar una reserva como concluida (si su check_out ya pasó)
+export const completeBooking = async (id) => {
+  const response = await bookingsAPI.patch(`/bookings/${id}/complete`)
+  return response.data
+}
+
+// Cancelar una reserva (admin)
+export const cancelBooking = async (id) => {
+  const response = await bookingsAPI.patch(`/bookings/${id}/cancel`)
+  return response.data
+}
+
+// Marcar automáticamente todas las reservas vencidas como concluidas
+export const markExpiredBookingsAsCompleted = async () => {
+  const response = await bookingsAPI.post('/bookings/mark-expired-as-completed')
+  return response.data
+}
+
+// Marcar reserva como PAGADO
+export const markBookingAsPaid = async (id, dollarRate) => {
+  const response = await bookingsAPI.patch(`/bookings/${id}/paid`, { dollar_rate: dollarRate })
+  return response.data
+}
+
+// Tipo de cambio del dólar
+export const getDollarRate = async () => {
+  const response = await bookingsAPI.get('/config/dollar-rate')
+  return response.data
+}
+
+export const setDollarRate = async (rate) => {
+  const response = await bookingsAPI.put('/config/dollar-rate', { rate })
+  return response.data
+}
+
+// Historial de tipos de cambio
+export const getDollarRateHistory = async () => {
+  const response = await bookingsAPI.get('/config/dollar-rate/history')
+  return response.data
+}
+
+// Estadísticas financieras
+export const getFinanceStats = async (period = 'monthly') => {
+  const response = await bookingsAPI.get('/stats/finance', { params: { period } })
+  return response.data
+}
+
+// Todos los pagos registrados en MySQL
+export const getAllPayments = async () => {
+  const response = await bookingsAPI.get('/stats/payments')
+  return response.data
+}
+
+// Cotizaciones del dólar en tiempo real (proxy → dolarapi.com, cache 5 min en backend)
+export const getMarketRates = async () => {
+  const response = await bookingsAPI.get('/stats/market-rates')
+  return response.data.data || []
 }
 

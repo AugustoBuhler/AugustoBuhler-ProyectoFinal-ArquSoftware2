@@ -48,39 +48,45 @@ func (d *DateOnly) UnmarshalJSON(data []byte) error {
 }
 
 type Booking struct {
-	ID              int64     `json:"id" bson:"id"`
-	ApartmentID     int64     `json:"apartment_id" bson:"apartment_id"`
-	UserID          *int64    `json:"user_id,omitempty" bson:"user_id,omitempty"` // Opcional (puede ser null para reservas públicas)
-	GuestInfo       GuestInfo `json:"user_info" bson:"user_info"`                 // Datos del huésped (requerido)
-	CheckIn         time.Time `json:"check_in" bson:"check_in"`                   // En BD: time.Time, en JSON: "YYYY-MM-DD"
-	CheckOut        time.Time `json:"check_out" bson:"check_out"`                 // En BD: time.Time, en JSON: "YYYY-MM-DD"
-	Guests          int       `json:"guests" bson:"guests"`                       // capacity_requested
-	TotalPrice      float64   `json:"total_price" bson:"total_price"`
-	PaymentMethod   string    `json:"payment_method" bson:"payment_method"`       // "transferencia" o "efectivo"
-	Status          string    `json:"status" bson:"status"`                       // "confirmed", "cancelled", "pending"
-	CreatedByAdmin  bool      `json:"created_by_admin" bson:"created_by_admin"`
-	AdminUserID     *int64    `json:"admin_user_id,omitempty" bson:"admin_user_id,omitempty"`
-	CreatedAt       time.Time `json:"created_at" bson:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at" bson:"updated_at"`
+	ID               int64      `json:"id" bson:"id"`
+	ApartmentID      int64      `json:"apartment_id" bson:"apartment_id"`
+	UserID           *int64     `json:"user_id,omitempty" bson:"user_id,omitempty"`
+	GuestInfo        GuestInfo  `json:"user_info" bson:"user_info"`
+	CheckIn          time.Time  `json:"check_in" bson:"check_in"`
+	CheckOut         time.Time  `json:"check_out" bson:"check_out"`
+	Guests           int        `json:"guests" bson:"guests"`
+	TotalPrice       float64    `json:"total_price" bson:"total_price"`
+	DepositAmount    float64    `json:"deposit_amount" bson:"deposit_amount"`
+	PaymentMethod    string     `json:"payment_method" bson:"payment_method"`
+	Status           string     `json:"status" bson:"status"` // "reservada", "pagado", "cancelada", "finalizada"
+	USDAmount        *float64   `json:"usd_amount,omitempty" bson:"usd_amount,omitempty"`
+	ExchangeRateUsed *float64   `json:"exchange_rate_used,omitempty" bson:"exchange_rate_used,omitempty"`
+	PaidAt           *time.Time `json:"paid_at,omitempty" bson:"paid_at,omitempty"`
+	CreatedByAdmin   bool       `json:"created_by_admin" bson:"created_by_admin"`
+	AdminUserID      *int64     `json:"admin_user_id,omitempty" bson:"admin_user_id,omitempty"`
+	CreatedAt        time.Time  `json:"created_at" bson:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at" bson:"updated_at"`
 }
 
-// BookingResponse es el struct usado para serializar las respuestas JSON
-// con fechas en formato "YYYY-MM-DD" (sin hora ni zona horaria)
 type BookingResponse struct {
-	ID              int64     `json:"id"`
-	ApartmentID     int64     `json:"apartment_id"`
-	UserID          *int64    `json:"user_id,omitempty"`
-	GuestInfo       GuestInfo `json:"user_info"`
-	CheckIn         string    `json:"check_in"`         // "YYYY-MM-DD"
-	CheckOut        string    `json:"check_out"`        // "YYYY-MM-DD"
-	Guests          int       `json:"guests"`
-	TotalPrice      float64   `json:"total_price"`
-	PaymentMethod   string    `json:"payment_method"`
-	Status          string    `json:"status"`
-	CreatedByAdmin  bool      `json:"created_by_admin"`
-	AdminUserID     *int64    `json:"admin_user_id,omitempty"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
+	ID               int64      `json:"id"`
+	ApartmentID      int64      `json:"apartment_id"`
+	UserID           *int64     `json:"user_id,omitempty"`
+	GuestInfo        GuestInfo  `json:"user_info"`
+	CheckIn          string     `json:"check_in"`
+	CheckOut         string     `json:"check_out"`
+	Guests           int        `json:"guests"`
+	TotalPrice       float64    `json:"total_price"`
+	DepositAmount    float64    `json:"deposit_amount"`
+	PaymentMethod    string     `json:"payment_method"`
+	Status           string     `json:"status"`
+	USDAmount        *float64   `json:"usd_amount,omitempty"`
+	ExchangeRateUsed *float64   `json:"exchange_rate_used,omitempty"`
+	PaidAt           *time.Time `json:"paid_at,omitempty"`
+	CreatedByAdmin   bool       `json:"created_by_admin"`
+	AdminUserID      *int64     `json:"admin_user_id,omitempty"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
 }
 
 // ToBookingResponse convierte un Booking a BookingResponse con fechas formateadas
@@ -99,20 +105,24 @@ func (b *Booking) ToBookingResponse() *BookingResponse {
 	checkOutStr := formatDateOnly(checkOutUTC)
 	
 	return &BookingResponse{
-		ID:             b.ID,
-		ApartmentID:    b.ApartmentID,
-		UserID:         b.UserID,
-		GuestInfo:      b.GuestInfo,
-		CheckIn:        checkInStr,
-		CheckOut:       checkOutStr,
-		Guests:         b.Guests,
-		TotalPrice:     b.TotalPrice,
-		PaymentMethod:  b.PaymentMethod,
-		Status:         b.Status,
-		CreatedByAdmin: b.CreatedByAdmin,
-		AdminUserID:    b.AdminUserID,
-		CreatedAt:      b.CreatedAt,
-		UpdatedAt:      b.UpdatedAt,
+		ID:               b.ID,
+		ApartmentID:      b.ApartmentID,
+		UserID:           b.UserID,
+		GuestInfo:        b.GuestInfo,
+		CheckIn:          checkInStr,
+		CheckOut:         checkOutStr,
+		Guests:           b.Guests,
+		TotalPrice:       b.TotalPrice,
+		DepositAmount:    b.DepositAmount,
+		PaymentMethod:    b.PaymentMethod,
+		Status:           b.Status,
+		USDAmount:        b.USDAmount,
+		ExchangeRateUsed: b.ExchangeRateUsed,
+		PaidAt:           b.PaidAt,
+		CreatedByAdmin:   b.CreatedByAdmin,
+		AdminUserID:      b.AdminUserID,
+		CreatedAt:        b.CreatedAt,
+		UpdatedAt:        b.UpdatedAt,
 	}
 }
 
@@ -162,10 +172,14 @@ func (req *CreateBookingRequest) Validate() error {
 }
 
 type UpdateBookingRequest struct {
-	CheckIn       *string  `json:"check_in"`
-	CheckOut      *string  `json:"check_out"`
-	Guests        *int     `json:"guests"`
-	Status        *string  `json:"status" binding:"omitempty,oneof=confirmed cancelled pending"`
-	PaymentMethod *string  `json:"payment_method" binding:"omitempty,oneof=transferencia efectivo"`
+	ApartmentID   *int64     `json:"apartment_id"`
+	CheckIn       *string    `json:"check_in"`
+	CheckOut      *string    `json:"check_out"`
+	Guests        *int       `json:"guests"`
+	Status        *string    `json:"status" binding:"omitempty,oneof=reservada pagado cancelada finalizada"`
+	PaymentMethod *string    `json:"payment_method" binding:"omitempty,oneof=transferencia efectivo"`
+	TotalPrice    *float64   `json:"total_price"`
+	USDAmount     *float64   `json:"usd_amount"`
+	GuestInfo     *GuestInfo `json:"user_info"`
 }
 

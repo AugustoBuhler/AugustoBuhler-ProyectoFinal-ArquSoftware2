@@ -67,21 +67,37 @@ const ApartmentDetailPage = () => {
         transition={{ duration: 0.5 }}
         className="bg-white rounded-2xl shadow-xl overflow-hidden"
       >
-        <div className="relative h-96 bg-gradient-to-br from-primary-400 to-primary-600">
-          {apartment.images && apartment.images.length > 0 ? (
-            <img
-              src={apartment.images[0]}
-              alt={apartment.name}
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center text-white text-8xl">
-              🏠
+        {/* Galería principal */}
+        <div className="relative bg-gray-100">
+          <div className="h-80 md:h-96">
+            {apartment.images && apartment.images.length > 0 ? (
+              <img
+                src={apartment.images[0]}
+                alt={apartment.name}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-gray-300 text-8xl">
+                🏠
+              </div>
+            )}
+          </div>
+          {apartment.available && (
+            <div className="absolute top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-full text-sm font-semibold shadow">
+              Disponible
             </div>
           )}
-          {apartment.available && (
-            <div className="absolute top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-full text-sm font-semibold">
-              Disponible
+          {/* Thumbnails */}
+          {apartment.images && apartment.images.length > 1 && (
+            <div className="hidden md:flex gap-3 p-4 bg-white/80 backdrop-blur border-t border-gray-100">
+              {apartment.images.slice(1, 4).map((img, idx) => (
+                <div
+                  key={idx}
+                  className="h-20 w-32 rounded-lg overflow-hidden border border-gray-200"
+                >
+                  <img src={img} alt={`${apartment.name} ${idx + 2}`} className="w-full h-full object-cover" />
+                </div>
+              ))}
             </div>
           )}
         </div>

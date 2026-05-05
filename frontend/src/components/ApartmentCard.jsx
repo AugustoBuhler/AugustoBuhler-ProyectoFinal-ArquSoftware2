@@ -9,7 +9,7 @@ const ApartmentCard = ({ apartment, index }) => {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay: index * 0.1 }}
       whileHover={{ y: -5 }}
-      className="card"
+      className="card border border-gray-100"
     >
       <Link to={`/apartment/${apartment.id}`}>
         <div className="relative h-48 bg-gradient-to-br from-primary-400 to-primary-600 overflow-hidden">

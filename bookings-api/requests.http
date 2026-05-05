@@ -29,14 +29,14 @@ Content-Type: application/json
 {
   "apartment_type": "double_matrimonial",
   "user_info": {
-    "first_name": "Laura",
+    "first_name": "Gino",
     "last_name": "Bueno",
     "dni": "23677333",
     "phone": "+5491179232222",
     "email": "laura.bueno@example.com"
   },
-  "check_in": "2026-02-10",
-  "check_out": "2026-02-15",
+  "check_in": "2026-03-08",
+  "check_out": "2026-03-15",
   "guests": 2,
   "payment_method": "transferencia"
 }
@@ -46,14 +46,14 @@ POST {{baseUrl}}/bookings
 Content-Type: application/json
 
 {
-  "apartment_id": 4,
+  "apartment_id": 20,
   "user_id": 1,
   "user_info": {
-    "first_name": "Octavio",
+    "first_name": "Pedrito",
     "last_name": "Buhler",
     "dni": "480983218",
     "phone": "+5491198765999",
-    "email": "octavio.buhler@example.com"
+    "email": "pedrito.buhler@example.com"
   },
   "check_in": "2026-01-20",
   "check_out": "2026-01-23",
@@ -174,3 +174,32 @@ GET {{apartmentsApiUrl}}/apartment-types
 ### 16. Filtrar apartamentos por tipo manualmente (ejemplo Double Matrimonial)
 # Buscar en la respuesta los que contengan "Double Matrimonial" en el nombre
 GET {{apartmentsApiUrl}}/apartments?size=1000
+
+### ============================================
+### NUEVOS ENDPOINTS: ESTADOS DE RESERVAS
+### ============================================
+
+### 17. Marcar reserva como concluida (solo si check_out ya pasó)
+# Este endpoint marca una reserva como "concluida" si su fecha de check-out ya pasó
+# Esto libera el apartamento para nuevas reservas
+PATCH {{baseUrl}}/bookings/{{bookingId}}/complete
+
+### 18. Cancelar reserva (admin)
+# Este endpoint marca una reserva como "cancelled"
+# Solo puede cancelar reservas que no estén ya canceladas o concluidas
+PATCH {{baseUrl}}/bookings/{{bookingId}}/cancel
+
+### 19. Marcar automáticamente todas las reservas vencidas como concluidas
+# Este endpoint busca todas las reservas confirmadas cuyo check_out ya pasó
+# y las marca automáticamente como "concluida"
+# Retorna el número de reservas marcadas como concluidas
+POST {{baseUrl}}/bookings/mark-expired-as-completed
+
+### 20. Obtener reservas con filtro por estado "concluida"
+GET {{baseUrl}}/bookings?status=concluida&size=100
+
+### 21. Obtener reservas con filtro por estado "cancelled"
+GET {{baseUrl}}/bookings?status=cancelled&size=100
+
+### 22. Obtener reservas confirmadas (para ver cuáles están activas)
+GET {{baseUrl}}/bookings?status=confirmed&size=100

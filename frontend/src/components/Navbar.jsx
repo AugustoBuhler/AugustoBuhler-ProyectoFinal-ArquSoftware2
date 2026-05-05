@@ -1,6 +1,6 @@
-import { Link } from 'react-router-dom'
+import { NavLink, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Home, Search, Settings } from 'lucide-react'
+import { Home, Search, Settings, ClipboardList } from 'lucide-react'
 
 const Navbar = () => {
   return (
@@ -8,7 +8,7 @@ const Navbar = () => {
       initial={{ y: -100 }}
       animate={{ y: 0 }}
       transition={{ duration: 0.5 }}
-      className="bg-white shadow-md sticky top-0 z-50"
+      className="bg-white/90 backdrop-blur shadow-sm sticky top-0 z-50"
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
@@ -25,20 +25,51 @@ const Navbar = () => {
           </Link>
           
           <div className="flex items-center space-x-4">
-            <Link
+            <NavLink
               to="/"
-              className="flex items-center space-x-2 text-gray-600 hover:text-primary-600 transition-colors"
+              className={({ isActive }) =>
+                `flex items-center space-x-2 text-sm font-medium transition-colors ${
+                  isActive ? 'text-primary-600' : 'text-gray-600 hover:text-primary-600'
+                }`
+              }
             >
               <Search className="w-5 h-5" />
-              <span className="hidden sm:inline">Buscar</span>
-            </Link>
-            <Link
+              <span className="hidden sm:inline">Inicio</span>
+            </NavLink>
+            <NavLink
+              to="/search"
+              className={({ isActive }) =>
+                `text-sm font-medium transition-colors ${
+                  isActive ? 'text-primary-600' : 'text-gray-600 hover:text-primary-600'
+                }`
+              }
+            >
+              Departamentos
+            </NavLink>
+            <NavLink
+              to="/booking-status"
+              className={({ isActive }) =>
+                `flex items-center space-x-1.5 text-sm font-medium px-3 py-1.5 rounded-lg transition-colors ${
+                  isActive
+                    ? 'bg-primary-600 text-white'
+                    : 'bg-primary-50 text-primary-700 hover:bg-primary-100'
+                }`
+              }
+            >
+              <ClipboardList className="w-4 h-4" />
+              <span>Mi Reserva</span>
+            </NavLink>
+            <NavLink
               to="/admin/login"
-              className="flex items-center space-x-2 text-gray-600 hover:text-primary-600 transition-colors"
+              className={({ isActive }) =>
+                `flex items-center space-x-2 text-sm font-medium transition-colors ${
+                  isActive ? 'text-primary-600' : 'text-gray-600 hover:text-primary-600'
+                }`
+              }
             >
               <Settings className="w-5 h-5" />
               <span className="hidden sm:inline">Admin</span>
-            </Link>
+            </NavLink>
           </div>
         </div>
       </div>

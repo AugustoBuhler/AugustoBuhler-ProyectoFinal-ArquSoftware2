@@ -15,25 +15,12 @@ const ConfirmationPage = () => {
       try {
         // Obtener datos de la reserva directamente desde la API (base de datos)
         const data = await getBookingById(bookingId)
-        // Debug crítico: Verificar qué recibimos del backend
-        console.log('🔍 DEBUG - Datos recibidos del backend:', {
-          check_in_valor: data.check_in,
-          check_in_tipo: typeof data.check_in,
-          check_in_esDate: data.check_in instanceof Date,
-          check_out_valor: data.check_out,
-          check_out_tipo: typeof data.check_out,
-          check_out_esDate: data.check_out instanceof Date,
-        })
-        // Si es Date, convertir inmediatamente a string "YYYY-MM-DD" usando UTC
+        // Normalizar fechas a string YYYY-MM-DD por si axios las convirtió a Date
         if (data.check_in instanceof Date) {
-          const isoStr = data.check_in.toISOString()
-          data.check_in = isoStr.split('T')[0]
-          console.log('⚠️ check_in era Date, convertido a:', data.check_in)
+          data.check_in = data.check_in.toISOString().split('T')[0]
         }
         if (data.check_out instanceof Date) {
-          const isoStr = data.check_out.toISOString()
-          data.check_out = isoStr.split('T')[0]
-          console.log('⚠️ check_out era Date, convertido a:', data.check_out)
+          data.check_out = data.check_out.toISOString().split('T')[0]
         }
         setBooking(data)
       } catch (error) {
@@ -105,9 +92,6 @@ const ConfirmationPage = () => {
               <p className="font-semibold text-gray-800">
                 {formatDate(booking.check_in)}
               </p>
-              <p className="text-xs text-red-600 mt-1 font-mono">
-                DEBUG: {String(booking.check_in)} | Tipo: {typeof booking.check_in} | EsDate: {String(booking.check_in instanceof Date)} | formatDate: {formatDate(booking.check_in)}
-              </p>
             </div>
           </div>
           <div className="flex items-start space-x-3">
@@ -116,9 +100,6 @@ const ConfirmationPage = () => {
               <p className="text-sm text-gray-600">Check-out</p>
               <p className="font-semibold text-gray-800">
                 {formatDate(booking.check_out)}
-              </p>
-              <p className="text-xs text-red-600 mt-1 font-mono">
-                DEBUG: {String(booking.check_out)} | Tipo: {typeof booking.check_out)} | EsDate: {String(booking.check_out instanceof Date)} | formatDate: {formatDate(booking.check_out)}
               </p>
             </div>
           </div>
