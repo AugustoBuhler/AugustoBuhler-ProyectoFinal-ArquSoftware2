@@ -64,6 +64,9 @@ type Booking struct {
 	PaidAt           *time.Time `json:"paid_at,omitempty" bson:"paid_at,omitempty"`
 	CreatedByAdmin   bool       `json:"created_by_admin" bson:"created_by_admin"`
 	AdminUserID      *int64     `json:"admin_user_id,omitempty" bson:"admin_user_id,omitempty"`
+	DepositPaid      bool       `json:"deposit_paid" bson:"deposit_paid"`
+	MPPaymentID      string     `json:"mp_payment_id,omitempty" bson:"mp_payment_id,omitempty"`
+	MPPreferenceID   string     `json:"mp_preference_id,omitempty" bson:"mp_preference_id,omitempty"`
 	CreatedAt        time.Time  `json:"created_at" bson:"created_at"`
 	UpdatedAt        time.Time  `json:"updated_at" bson:"updated_at"`
 }
@@ -85,8 +88,18 @@ type BookingResponse struct {
 	PaidAt           *time.Time `json:"paid_at,omitempty"`
 	CreatedByAdmin   bool       `json:"created_by_admin"`
 	AdminUserID      *int64     `json:"admin_user_id,omitempty"`
+	DepositPaid      bool       `json:"deposit_paid"`
+	MPPaymentID      string     `json:"mp_payment_id,omitempty"`
+	MPPreferenceID   string     `json:"mp_preference_id,omitempty"`
 	CreatedAt        time.Time  `json:"created_at"`
 	UpdatedAt        time.Time  `json:"updated_at"`
+}
+
+type CheckoutResponse struct {
+	PreferenceID  string  `json:"preference_id"`
+	InitPoint     string  `json:"init_point"`
+	BookingID     int64   `json:"booking_id"`
+	DepositAmount float64 `json:"deposit_amount"`
 }
 
 // ToBookingResponse convierte un Booking a BookingResponse con fechas formateadas
@@ -121,6 +134,9 @@ func (b *Booking) ToBookingResponse() *BookingResponse {
 		PaidAt:           b.PaidAt,
 		CreatedByAdmin:   b.CreatedByAdmin,
 		AdminUserID:      b.AdminUserID,
+		DepositPaid:      b.DepositPaid,
+		MPPaymentID:      b.MPPaymentID,
+		MPPreferenceID:   b.MPPreferenceID,
 		CreatedAt:        b.CreatedAt,
 		UpdatedAt:        b.UpdatedAt,
 	}

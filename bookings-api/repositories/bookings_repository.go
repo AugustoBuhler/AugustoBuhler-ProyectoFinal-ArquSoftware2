@@ -25,6 +25,9 @@ type BookingRepository interface {
 	GetNextID(ctx context.Context) (int64, error)
 	GetExpiredPaidBookings(ctx context.Context) ([]*domain.Booking, error)
 	MarkAsPaid(ctx context.Context, id int64, usdAmount float64, exchangeRate float64, paidAt time.Time) error
+	SaveMPPreferenceID(ctx context.Context, id int64, preferenceID string) error
+	MarkDepositPaid(ctx context.Context, id int64, paymentID string) error
+	CancelExpiredPendingBookings(ctx context.Context, maxAge time.Duration) (int, error)
 }
 
 type bookingRepository struct {
@@ -215,7 +218,8 @@ func (r *bookingRepository) CheckAvailability(ctx context.Context, apartmentID i
 	// En MongoDB, múltiples condiciones en el mismo nivel se evalúan con AND implícito
 	filter := bson.M{
 		"apartment_id": apartmentID,
-		"status":       bson.M{"$nin": []string{"cancelled", "cancelada", "concluida", "finalizada"}},
+		// "pendiente_pago" bloquea fechas temporalmente (hold de 30 min) para evitar doble reserva
+		"status": bson.M{"$nin": []string{"cancelled", "cancelada", "concluida", "finalizada"}},
 		"check_in":     bson.M{"$lt": checkOut},                            // existing.check_in < requested.check_out
 		"check_out":    bson.M{"$gt": checkIn},                             // existing.check_out > requested.check_in
 	}
@@ -274,6 +278,43 @@ func (r *bookingRepository) MarkAsPaid(ctx context.Context, id int64, usdAmount 
 	return nil
 }
 
+// SaveMPPreferenceID guarda el preference_id de Mercado Pago en la reserva
+func (r *bookingRepository) SaveMPPreferenceID(ctx context.Context, id int64, preferenceID string) error {
+	update := bson.M{
+		"$set": bson.M{
+			"mp_preference_id": preferenceID,
+			"updated_at":       time.Now(),
+		},
+	}
+	result, err := r.collection.UpdateOne(ctx, bson.M{"id": id}, update)
+	if err != nil {
+		return err
+	}
+	if result.MatchedCount == 0 {
+		return errors.New("booking not found")
+	}
+	return nil
+}
+
+// MarkDepositPaid registra el pago de la seña vía Mercado Pago
+func (r *bookingRepository) MarkDepositPaid(ctx context.Context, id int64, paymentID string) error {
+	update := bson.M{
+		"$set": bson.M{
+			"deposit_paid":  true,
+			"mp_payment_id": paymentID,
+			"updated_at":    time.Now(),
+		},
+	}
+	result, err := r.collection.UpdateOne(ctx, bson.M{"id": id}, update)
+	if err != nil {
+		return err
+	}
+	if result.MatchedCount == 0 {
+		return errors.New("booking not found")
+	}
+	return nil
+}
+
 // GetExpiredPaidBookings obtiene todas las reservas pagadas cuyo check_out ya pasó
 func (r *bookingRepository) GetExpiredPaidBookings(ctx context.Context) ([]*domain.Booking, error) {
 	now := time.Now().UTC()
@@ -310,5 +351,25 @@ func (r *bookingRepository) GetExpiredPaidBookings(ctx context.Context) ([]*doma
 	}
 
 	return bookings, nil
+}
+
+// CancelExpiredPendingBookings cancela reservas públicas en "pendiente_pago" que superaron maxAge sin pagar
+func (r *bookingRepository) CancelExpiredPendingBookings(ctx context.Context, maxAge time.Duration) (int, error) {
+	cutoff := time.Now().UTC().Add(-maxAge)
+	filter := bson.M{
+		"status":     "pendiente_pago",
+		"created_at": bson.M{"$lt": cutoff},
+	}
+	update := bson.M{
+		"$set": bson.M{
+			"status":     "cancelada",
+			"updated_at": time.Now().UTC(),
+		},
+	}
+	result, err := r.collection.UpdateMany(ctx, filter, update)
+	if err != nil {
+		return 0, err
+	}
+	return int(result.ModifiedCount), nil
 }
 

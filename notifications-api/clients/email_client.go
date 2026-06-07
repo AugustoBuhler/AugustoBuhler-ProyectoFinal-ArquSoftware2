@@ -95,6 +95,36 @@ func buildConfirmationHTML(b *Booking) string {
 		paymentLabel = "Efectivo"
 	}
 
+	// Bloque de comprobante MP (solo si se pagó seña online)
+	comprobanteBlock := ""
+	if b.MPPaymentID != "" {
+		comprobanteBlock = fmt.Sprintf(`
+              <tr style="background:#f0fdf4">
+                <td style="padding:14px 20px;color:#64748b;font-size:14px;border-bottom:1px solid #e2e8f0">Comprobante MP</td>
+                <td style="padding:14px 20px;color:#1e293b;font-size:14px;font-weight:600;border-bottom:1px solid #e2e8f0">
+                  <a href="https://www.mercadopago.com.ar/activities" style="color:#059669;text-decoration:none">
+                    #%s ↗
+                  </a>
+                </td>
+              </tr>`, b.MPPaymentID)
+	}
+
+	// Fila de seña abonada (solo si hay monto de seña)
+	depositRow := ""
+	if b.DepositAmount > 0 {
+		saldoPendiente := b.TotalPrice - b.DepositAmount
+		depositRow = fmt.Sprintf(`
+              <tr style="background:#f0fdf4">
+                <td style="padding:14px 20px;color:#059669;font-size:14px;font-weight:600;border-bottom:1px solid #e2e8f0">Seña abonada (30%%)</td>
+                <td style="padding:14px 20px;color:#059669;font-size:14px;font-weight:700;border-bottom:1px solid #e2e8f0">−$%.0f ARS</td>
+              </tr>
+              %s
+              <tr>
+                <td style="padding:14px 20px;color:#64748b;font-size:14px;border-bottom:1px solid #e2e8f0">Saldo a pagar al ingreso</td>
+                <td style="padding:14px 20px;color:#1e293b;font-size:14px;font-weight:600;border-bottom:1px solid #e2e8f0">$%.0f ARS</td>
+              </tr>`, b.DepositAmount, comprobanteBlock, saldoPendiente)
+	}
+
 	return fmt.Sprintf(`<!DOCTYPE html>
 <html lang="es">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -142,10 +172,6 @@ func buildConfirmationHTML(b *Booking) string {
                 </td>
               </tr>
 
-              <tr>
-                <td style="padding:14px 20px;color:#64748b;font-size:14px;border-bottom:1px solid #e2e8f0">Apartamento</td>
-                <td style="padding:14px 20px;color:#1e293b;font-size:14px;font-weight:600;border-bottom:1px solid #e2e8f0">N° %d</td>
-              </tr>
               <tr style="background:#f1f5f9">
                 <td style="padding:14px 20px;color:#64748b;font-size:14px;border-bottom:1px solid #e2e8f0">Check-in</td>
                 <td style="padding:14px 20px;color:#1e293b;font-size:14px;font-weight:600;border-bottom:1px solid #e2e8f0">%s</td>
@@ -163,8 +189,30 @@ func buildConfirmationHTML(b *Booking) string {
                 <td style="padding:14px 20px;color:#1e293b;font-size:14px;font-weight:600;border-bottom:1px solid #e2e8f0">%s</td>
               </tr>
               <tr style="background:#fef9c3">
-                <td style="padding:16px 20px;color:#854d0e;font-size:15px;font-weight:700">Total</td>
-                <td style="padding:16px 20px;color:#854d0e;font-size:20px;font-weight:800">$%.2f ARS</td>
+                <td style="padding:16px 20px;color:#854d0e;font-size:15px;font-weight:700;border-bottom:1px solid #e2e8f0">Total de la reserva</td>
+                <td style="padding:16px 20px;color:#854d0e;font-size:20px;font-weight:800;border-bottom:1px solid #e2e8f0">$%.0f ARS</td>
+              </tr>
+              %s
+            </table>
+          </td>
+        </tr>
+
+        <!-- Ubicación -->
+        <tr>
+          <td style="padding:0 40px 30px">
+            <table width="100%%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border-radius:10px;overflow:hidden;border:1px solid #e2e8f0">
+              <tr style="background:#e2e8f0">
+                <td style="padding:14px 20px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:1px">
+                  Ubicación
+                </td>
+              </tr>
+              <tr>
+                <td style="padding:16px 20px">
+                  <a href="https://maps.app.goo.gl/x1R6tsTCMJYedWss8" target="_blank"
+                     style="display:inline-flex;align-items:center;gap:8px;background:#4f46e5;color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:10px 20px;border-radius:8px">
+                    📍 Ver en Google Maps
+                  </a>
+                </td>
               </tr>
             </table>
           </td>
@@ -227,12 +275,12 @@ func buildConfirmationHTML(b *Booking) string {
 		b.GuestFirstName,
 		b.ID,
 		b.GuestFirstName, b.GuestLastName,
-		b.ApartmentID,
 		b.CheckIn,
 		b.CheckOut,
 		b.Guests,
 		paymentLabel,
 		b.TotalPrice,
+		depositRow,
 		b.GuestFirstName, b.GuestLastName,
 		b.GuestDNI,
 		b.GuestEmail,

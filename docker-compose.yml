@@ -129,6 +129,7 @@ services:
       - MONGODB_URI=mongodb://root:root@mongodb:27017/apartments_db?authSource=admin
       - USERS_API_URL=http://users-api:8080
       - RABBITMQ_URL=amqp://admin:admin@rabbitmq:5672/
+      - JWT_SECRET=your-secret-key-change-in-production
     depends_on:
       mongodb:
         condition: service_healthy
@@ -151,6 +152,11 @@ services:
       - USERS_API_URL=http://users-api:8080
       - APARTMENTS_API_URL=http://apartments-api:8081
       - RABBITMQ_URL=amqp://admin:admin@rabbitmq:5672/
+      - JWT_SECRET=your-secret-key-change-in-production
+      - MP_ACCESS_TOKEN=${MP_ACCESS_TOKEN}
+      - MP_PUBLIC_KEY=${MP_PUBLIC_KEY}
+      - NGROK_URL=${NGROK_URL}
+      - FRONTEND_BASE_URL=${FRONTEND_BASE_URL:-http://localhost:3000}
     depends_on:
       mongodb:
         condition: service_healthy

@@ -117,7 +117,8 @@ const AdminDashboard = () => {
       } else if (activeTab === 'bookings') {
         try { await markExpiredBookingsAsCompleted() } catch (_) { /* no bloquear */ }
         const response = await getAllBookings()
-        setBookings(response.data || [])
+        // Excluir reservas pendientes de pago — no son reservas confirmadas
+        setBookings((response.data || []).filter(b => b.status !== 'pendiente_pago'))
       } else if (activeTab === 'finance') {
         const [rateData, statsData, historyData, paymentsData] = await Promise.all([
           getDollarRate().catch(() => ({ rate: 0 })),
@@ -648,23 +649,6 @@ const AdminDashboard = () => {
                 </button>
               ) : (
                 <>
-                  <button
-                    onClick={handleMarkExpiredAsCompleted}
-                    disabled={processingExpired}
-                    className="btn-secondary flex items-center disabled:opacity-60"
-                  >
-                    {processingExpired ? (
-                      <>
-                        <div className="w-4 h-4 border-2 border-primary-600 border-t-transparent rounded-full animate-spin mr-2" />
-                        Procesando...
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle className="w-5 h-5 mr-2" />
-                        Marcar vencidas
-                      </>
-                    )}
-                  </button>
                   <button
                     onClick={handleNewBooking}
                     className="btn-primary flex items-center"

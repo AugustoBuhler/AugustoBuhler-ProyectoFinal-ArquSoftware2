@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"log"
 	"net/http"
 	"strconv"
 
@@ -31,19 +32,14 @@ func (c *BookingController) CreateBooking(ctx *gin.Context) {
 		return
 	}
 
-	// Determinar si es admin o reserva pública
-	// IMPORTANTE: user_id en el request es OPCIONAL
-	// - Si NO viene user_id: es una reserva pública (sin login) - OK
-	// - Si viene user_id: admin está creando reserva para un usuario específico (requiere que el usuario exista)
+	// isAdmin se determina por el JWT validado en el middleware AdminRequired.
+	// Si el contexto tiene admin_user_id, la request viene de un admin autenticado.
 	isAdmin := false
 	var adminUserID *int64
-	
-	// TODO: Extraer admin del JWT cuando implementemos autenticación
-	// Por ahora, si viene user_id en el request, asumimos que es un admin creando para ese usuario
-	// El user_id debe existir en la base de datos (se valida en el servicio)
-	if req.UserID != nil {
+	if id, exists := ctx.Get("admin_user_id"); exists {
 		isAdmin = true
-		adminUserID = req.UserID
+		v := id.(int64)
+		adminUserID = &v
 	}
 
 	booking, err := c.bookingService.CreateBooking(ctx.Request.Context(), req, isAdmin, adminUserID)
@@ -286,6 +282,94 @@ func (c *BookingController) MarkAsPaid(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, booking.ToBookingResponse())
+}
+
+// CreateCheckout genera una preferencia de pago en Mercado Pago para la seña de la reserva
+func (c *BookingController) CreateCheckout(ctx *gin.Context) {
+	idParam := ctx.Param("id")
+	id, err := strconv.ParseInt(idParam, 10, 64)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid booking id"})
+		return
+	}
+
+	checkout, err := c.bookingService.CreateCheckout(ctx.Request.Context(), id)
+	if err != nil {
+		if err.Error() == "booking not found" {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		}
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, checkout)
+}
+
+// HandlePaymentWebhook procesa las notificaciones de pago de Mercado Pago
+func (c *BookingController) HandlePaymentWebhook(ctx *gin.Context) {
+	// MP puede enviar el id como query param (IPN legacy) o como JSON body (webhooks)
+	if topic := ctx.Query("topic"); topic == "payment" {
+		paymentID := ctx.Query("id")
+		if paymentID != "" {
+			if err := c.bookingService.ConfirmPaymentFromWebhook(ctx.Request.Context(), paymentID); err != nil {
+				log.Printf("[webhook] error processing payment %s: %v", paymentID, err)
+			}
+		}
+		ctx.JSON(http.StatusOK, gin.H{"message": "ok"})
+		return
+	}
+
+	var notification map[string]interface{}
+	if err := ctx.ShouldBindJSON(&notification); err != nil {
+		ctx.JSON(http.StatusOK, gin.H{"message": "ok"})
+		return
+	}
+
+	notifType, _ := notification["type"].(string)
+	if notifType != "payment" {
+		ctx.JSON(http.StatusOK, gin.H{"message": "ok"})
+		return
+	}
+
+	data, _ := notification["data"].(map[string]interface{})
+	if data == nil {
+		ctx.JSON(http.StatusOK, gin.H{"message": "ok"})
+		return
+	}
+
+	var paymentID string
+	switch v := data["id"].(type) {
+	case string:
+		paymentID = v
+	case float64:
+		paymentID = strconv.FormatInt(int64(v), 10)
+	}
+
+	if paymentID != "" {
+		if err := c.bookingService.ConfirmPaymentFromWebhook(ctx.Request.Context(), paymentID); err != nil {
+			log.Printf("[webhook] error processing payment %s: %v", paymentID, err)
+		}
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{"message": "ok"})
+}
+
+// VerifyPayment consulta MP directamente para confirmar si hay un pago aprobado para la reserva.
+// El frontend lo llama cuando el usuario pagó pero la pestaña de MP no redirigió automáticamente.
+func (c *BookingController) VerifyPayment(ctx *gin.Context) {
+	id, err := strconv.ParseInt(ctx.Param("id"), 10, 64)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid booking id"})
+		return
+	}
+
+	if err := c.bookingService.VerifyPayment(ctx.Request.Context(), id); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{"message": "payment confirmed"})
 }
 
 // MarkExpiredBookingsAsCompleted marca automáticamente todas las reservas vencidas como concluidas

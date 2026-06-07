@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strconv"
 	"sync"
 	"time"
 
@@ -28,6 +29,20 @@ type BookingService interface {
 	CancelBooking(ctx context.Context, id int64) (*domain.Booking, error)
 	MarkAsPaid(ctx context.Context, id int64, dollarRate float64) (*domain.Booking, error)
 	MarkExpiredBookingsAsCompleted(ctx context.Context) (int, error)
+	CancelExpiredPendingBookings(ctx context.Context) (int, error)
+	CreateCheckout(ctx context.Context, bookingID int64) (*domain.CheckoutResponse, error)
+	ConfirmPaymentFromWebhook(ctx context.Context, paymentID string) error
+	VerifyPayment(ctx context.Context, bookingID int64) error
+}
+
+type RabbitMQClient interface {
+	PublishBookingEvent(action string, bookingID int64) error
+}
+
+type MPClient interface {
+	CreatePreference(ctx context.Context, bookingID int64, depositAmount float64, description string, guestEmail string) (*domain.CheckoutResponse, error)
+	GetPayment(ctx context.Context, paymentID string) (status string, externalRef string, err error)
+	FindApprovedPayment(ctx context.Context, externalRef string, createdAfter time.Time) (string, error)
 }
 
 type bookingService struct {
@@ -36,10 +51,7 @@ type bookingService struct {
 	apartmentsClient repositories.ApartmentsClient
 	rmqClient        RabbitMQClient
 	financeRepo      repositories.FinanceRepository
-}
-
-type RabbitMQClient interface {
-	PublishBookingEvent(action string, bookingID int64) error
+	mpClient         MPClient
 }
 
 func NewBookingService(
@@ -48,6 +60,7 @@ func NewBookingService(
 	apartmentsClient repositories.ApartmentsClient,
 	rmqClient RabbitMQClient,
 	financeRepo repositories.FinanceRepository,
+	mpClient MPClient,
 ) BookingService {
 	return &bookingService{
 		bookingRepo:      bookingRepo,
@@ -55,6 +68,7 @@ func NewBookingService(
 		apartmentsClient: apartmentsClient,
 		rmqClient:        rmqClient,
 		financeRepo:      financeRepo,
+		mpClient:         mpClient,
 	}
 }
 
@@ -366,7 +380,14 @@ func (s *bookingService) CreateBooking(ctx context.Context, req domain.CreateBoo
 		TotalPrice:     totalPrice,
 		DepositAmount:  calculateDeposit(totalPrice),
 		PaymentMethod:  req.PaymentMethod,
-		Status:         "reservada",
+		// Reservas públicas arrancan en "pendiente_pago" hasta confirmar el pago de la seña.
+		// Reservas admin van directamente a "reservada" (no requieren pago online).
+		Status:         func() string {
+			if isAdmin {
+				return "reservada"
+			}
+			return "pendiente_pago"
+		}(),
 		CreatedByAdmin: isAdmin,
 		AdminUserID:    adminUserID,
 	}
@@ -376,9 +397,11 @@ func (s *bookingService) CreateBooking(ctx context.Context, req domain.CreateBoo
 		return nil, fmt.Errorf("failed to create booking: %w", err)
 	}
 
-	// Publicar evento a RabbitMQ
-	if err := s.rmqClient.PublishBookingEvent("created", booking.ID); err != nil {
-		// Log error pero no fallar la creación
+	// Solo publicar evento "created" en reservas admin — las públicas esperan al pago de la seña
+	if isAdmin {
+		if err := s.rmqClient.PublishBookingEvent("created", booking.ID); err != nil {
+			// Log error pero no fallar la creación
+		}
 	}
 
 	return booking, nil
@@ -712,6 +735,107 @@ func (s *bookingService) MarkAsPaid(ctx context.Context, id int64, dollarRate fl
 	}
 
 	return updated, nil
+}
+
+// CreateCheckout genera una preferencia de pago en Mercado Pago para la seña de una reserva
+func (s *bookingService) CreateCheckout(ctx context.Context, bookingID int64) (*domain.CheckoutResponse, error) {
+	if s.mpClient == nil {
+		return nil, errors.New("payment gateway not configured")
+	}
+
+	booking, err := s.bookingRepo.GetByID(ctx, bookingID)
+	if err != nil {
+		return nil, err
+	}
+
+	if booking.Status != "reservada" && booking.Status != "pendiente_pago" {
+		return nil, fmt.Errorf("cannot create checkout for booking with status %s", booking.Status)
+	}
+
+	description := fmt.Sprintf("Seña reserva #%d", bookingID)
+	checkout, err := s.mpClient.CreatePreference(ctx, bookingID, booking.DepositAmount, description, booking.GuestInfo.Email)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create checkout: %w", err)
+	}
+
+	if err := s.bookingRepo.SaveMPPreferenceID(ctx, bookingID, checkout.PreferenceID); err != nil {
+		fmt.Printf("[CreateCheckout] warning: failed to save preference ID: %v\n", err)
+	}
+
+	return checkout, nil
+}
+
+// ConfirmPaymentFromWebhook procesa la notificación de pago aprobado de Mercado Pago
+func (s *bookingService) ConfirmPaymentFromWebhook(ctx context.Context, paymentID string) error {
+	if s.mpClient == nil {
+		return errors.New("payment gateway not configured")
+	}
+
+	status, externalRef, err := s.mpClient.GetPayment(ctx, paymentID)
+	if err != nil {
+		return fmt.Errorf("failed to get payment info: %w", err)
+	}
+
+	if status != "approved" {
+		return fmt.Errorf("payment %s has status %s, not approved", paymentID, status)
+	}
+
+	if externalRef == "" {
+		return fmt.Errorf("payment %s has no external_reference", paymentID)
+	}
+
+	bookingID, err := strconv.ParseInt(externalRef, 10, 64)
+	if err != nil {
+		return fmt.Errorf("invalid external_reference %q: %w", externalRef, err)
+	}
+
+	if err := s.bookingRepo.MarkDepositPaid(ctx, bookingID, paymentID); err != nil {
+		return fmt.Errorf("failed to mark deposit as paid: %w", err)
+	}
+
+	// Pasar de "pendiente_pago" a "reservada" — el pago confirmó la reserva
+	if err := s.bookingRepo.UpdateStatus(ctx, bookingID, "reservada"); err != nil {
+		return fmt.Errorf("failed to update booking status to reservada: %w", err)
+	}
+
+	if err := s.rmqClient.PublishBookingEvent("payment_confirmed", bookingID); err != nil {
+		fmt.Printf("[ConfirmPaymentFromWebhook] warning: failed to publish event: %v\n", err)
+	}
+
+	return nil
+}
+
+// VerifyPayment consulta directamente la API de MP buscando un pago aprobado para esta reserva.
+// Usado cuando el usuario pagó pero la pestaña de MP no redirigió automáticamente.
+func (s *bookingService) VerifyPayment(ctx context.Context, bookingID int64) error {
+	if s.mpClient == nil {
+		return errors.New("payment gateway not configured")
+	}
+
+	booking, err := s.bookingRepo.GetByID(ctx, bookingID)
+	if err != nil {
+		return err
+	}
+
+	if booking.DepositPaid {
+		return nil // ya estaba confirmado
+	}
+
+	if booking.Status != "pendiente_pago" {
+		return fmt.Errorf("booking is not awaiting payment")
+	}
+
+	paymentID, err := s.mpClient.FindApprovedPayment(ctx, strconv.FormatInt(bookingID, 10), booking.CreatedAt)
+	if err != nil {
+		return err
+	}
+
+	return s.ConfirmPaymentFromWebhook(ctx, paymentID)
+}
+
+// CancelExpiredPendingBookings cancela reservas públicas que llevan más de 30 minutos sin pagar la seña
+func (s *bookingService) CancelExpiredPendingBookings(ctx context.Context) (int, error) {
+	return s.bookingRepo.CancelExpiredPendingBookings(ctx, 30*time.Minute)
 }
 
 // MarkExpiredBookingsAsCompleted marca automáticamente las reservas pagadas vencidas como "finalizada"

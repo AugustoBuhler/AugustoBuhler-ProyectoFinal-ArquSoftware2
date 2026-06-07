@@ -10,6 +10,7 @@ import (
 
 	"apartments-api/clients"
 	"apartments-api/controllers"
+	"apartments-api/middleware"
 	"apartments-api/repositories"
 	"apartments-api/services"
 
@@ -79,16 +80,24 @@ func main() {
 		c.Next()
 	})
 
+	jwtSecret := os.Getenv("JWT_SECRET")
+
 	// Rutas
 	api := router.Group("/api/v1")
 	{
-		api.POST("/apartments", aptController.CreateApartment)
+		// ── Rutas PÚBLICAS ───────────────────────────────────────────────────
 		api.GET("/apartments/:id", aptController.GetApartmentByID)
 		api.GET("/apartments", aptController.GetAllApartments)
-		api.PATCH("/apartments/:id", aptController.UpdateApartment)
-		api.DELETE("/apartments/:id", aptController.DeleteApartment)
 		api.GET("/apartment-types", aptController.GetApartmentTypes)
 		api.GET("/apartments/available-by-type", aptController.GetAvailableApartmentByType)
+
+		// ── Rutas ADMIN (requieren JWT válido con user_type == "admin") ──────
+		admin := api.Group("/", middleware.AdminRequired(jwtSecret))
+		{
+			admin.POST("/apartments", aptController.CreateApartment)
+			admin.PATCH("/apartments/:id", aptController.UpdateApartment)
+			admin.DELETE("/apartments/:id", aptController.DeleteApartment)
+		}
 	}
 
 	port := os.Getenv("PORT")

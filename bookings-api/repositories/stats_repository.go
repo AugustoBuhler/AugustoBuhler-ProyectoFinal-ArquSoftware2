@@ -38,9 +38,10 @@ func (r *statsRepository) GetFinanceStats(ctx context.Context, period string) (*
 		since = now.AddDate(-1, 0, 0) // 12 months back
 	}
 
-	// ── Summary: totals across ALL pagado bookings (not limited to period) ──
+	// ── Summary: totals de reservas cobradas (pagado + finalizada) ──
+	paidStatuses := bson.M{"$in": []string{"pagado", "finalizada"}}
 	summaryPipeline := bson.A{
-		bson.M{"$match": bson.M{"status": "pagado"}},
+		bson.M{"$match": bson.M{"status": paidStatuses, "paid_at": bson.M{"$exists": true}}},
 		bson.M{"$group": bson.M{
 			"_id":         nil,
 			"revenue_ars": bson.M{"$sum": "$total_price"},
@@ -77,7 +78,7 @@ func (r *statsRepository) GetFinanceStats(ctx context.Context, period string) (*
 	}
 
 	// ── Breakdown: grouped by period ──
-	matchStage := bson.M{"status": "pagado"}
+	matchStage := bson.M{"status": paidStatuses, "paid_at": bson.M{"$exists": true}}
 	if !since.IsZero() {
 		matchStage["paid_at"] = bson.M{"$gte": since}
 	}
@@ -172,7 +173,10 @@ func (r *statsRepository) GetFinanceStats(ctx context.Context, period string) (*
 // reflejen siempre el estado actual de cada reserva, sin importar ediciones posteriores.
 func (r *statsRepository) GetAllPaidBookings(ctx context.Context) ([]PaymentRecord, error) {
 	opts := options.Find().SetSort(bson.D{{Key: "paid_at", Value: -1}})
-	cursor, err := r.collection.Find(ctx, bson.M{"status": "pagado"}, opts)
+	cursor, err := r.collection.Find(ctx, bson.M{
+		"status":  bson.M{"$in": []string{"pagado", "finalizada"}},
+		"paid_at": bson.M{"$exists": true},
+	}, opts)
 	if err != nil {
 		return nil, err
 	}

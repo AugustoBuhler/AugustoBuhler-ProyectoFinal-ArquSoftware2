@@ -87,6 +87,27 @@ func (m *mockBookingRepo) MarkAsPaid(ctx context.Context, id int64, usdAmount fl
 	b.Status = "pagado"
 	return nil
 }
+func (m *mockBookingRepo) SaveMPPreferenceID(ctx context.Context, id int64, preferenceID string) error {
+	return nil
+}
+func (m *mockBookingRepo) MarkDepositPaid(ctx context.Context, id int64, paymentID string) error {
+	return nil
+}
+func (m *mockBookingRepo) CancelExpiredPendingBookings(ctx context.Context, maxAge time.Duration) (int, error) {
+	return 0, nil
+}
+
+type mockMPClient struct{}
+
+func (m *mockMPClient) CreatePreference(ctx context.Context, bookingID int64, depositAmount float64, description string, guestEmail string) (*domain.CheckoutResponse, error) {
+	return &domain.CheckoutResponse{}, nil
+}
+func (m *mockMPClient) GetPayment(ctx context.Context, paymentID string) (string, string, error) {
+	return "approved", "1", nil
+}
+func (m *mockMPClient) FindApprovedPayment(ctx context.Context, externalRef string, createdAfter time.Time) (string, error) {
+	return "12345", nil
+}
 
 type mockUsersClient struct{ exists bool }
 
@@ -183,6 +204,7 @@ func newService(repo *mockBookingRepo, apts []*repositories.ApartmentInfo) servi
 		&mockApartmentsClient{byType: apts, byID: byID},
 		&mockRMQ{},
 		&mockFinanceRepo{},
+		nil, // mpClient not needed in unit tests
 	)
 }
 
@@ -246,8 +268,9 @@ func TestCreateBooking_ByType_Success(t *testing.T) {
 	if booking.ApartmentID != 1 {
 		t.Errorf("expected apartment_id 1, got %d", booking.ApartmentID)
 	}
-	if booking.Status != "reservada" {
-		t.Errorf("expected status 'reservada', got %q", booking.Status)
+	// Reserva pública arranca en "pendiente_pago" hasta confirmar el pago de la seña
+	if booking.Status != "pendiente_pago" {
+		t.Errorf("expected status 'pendiente_pago', got %q", booking.Status)
 	}
 	// 1 noche * 150
 	if booking.TotalPrice != 150 {

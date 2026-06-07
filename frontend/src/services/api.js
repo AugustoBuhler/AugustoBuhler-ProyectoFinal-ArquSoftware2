@@ -98,3 +98,22 @@ export const getUserBookings = async (userId) => {
   }
 }
 
+export const createCheckout = async (bookingId) => {
+  try {
+    const response = await bookingsAPI.post(`/bookings/${bookingId}/checkout`)
+    return response.data
+  } catch (error) {
+    console.error('Error creating checkout:', error)
+    throw error
+  }
+}
+
+export const triggerPaymentWebhook = async (paymentId) => {
+  await bookingsAPI.post('/payments/webhook', { type: 'payment', data: { id: String(paymentId) } })
+}
+
+export const verifyPayment = async (bookingId) => {
+  const response = await bookingsAPI.post(`/bookings/${bookingId}/verify-payment`)
+  return response.data
+}
+

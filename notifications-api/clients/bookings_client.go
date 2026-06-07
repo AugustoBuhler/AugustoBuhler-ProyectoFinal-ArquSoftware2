@@ -10,19 +10,21 @@ import (
 )
 
 type Booking struct {
-	ID            int64     `json:"id"`
-	ApartmentID   int64     `json:"apartment_id"`
-	GuestFirstName string   `json:"-"`
-	GuestLastName  string   `json:"-"`
-	GuestEmail     string   `json:"-"`
-	GuestDNI       string   `json:"-"`
-	GuestPhone     string   `json:"-"`
-	CheckIn        string   `json:"check_in"`
-	CheckOut       string   `json:"check_out"`
-	Guests         int      `json:"guests"`
-	TotalPrice     float64  `json:"total_price"`
-	PaymentMethod  string   `json:"payment_method"`
-	Status         string   `json:"status"`
+	ID             int64   `json:"id"`
+	ApartmentID    int64   `json:"apartment_id"`
+	GuestFirstName string  `json:"-"`
+	GuestLastName  string  `json:"-"`
+	GuestEmail     string  `json:"-"`
+	GuestDNI       string  `json:"-"`
+	GuestPhone     string  `json:"-"`
+	CheckIn        string  `json:"check_in"`
+	CheckOut       string  `json:"check_out"`
+	Guests         int     `json:"guests"`
+	TotalPrice     float64 `json:"total_price"`
+	DepositAmount  float64 `json:"deposit_amount"`
+	MPPaymentID    string  `json:"mp_payment_id"`
+	PaymentMethod  string  `json:"payment_method"`
+	Status         string  `json:"status"`
 }
 
 // bookingAPIResponse refleja exactamente la respuesta de bookings-api
@@ -40,6 +42,8 @@ type bookingAPIResponse struct {
 	CheckOut      string  `json:"check_out"`
 	Guests        int     `json:"guests"`
 	TotalPrice    float64 `json:"total_price"`
+	DepositAmount float64 `json:"deposit_amount"`
+	MPPaymentID   string  `json:"mp_payment_id"`
 	PaymentMethod string  `json:"payment_method"`
 	Status        string  `json:"status"`
 }
@@ -99,6 +103,8 @@ func (c *bookingsClient) GetBookingByID(id int64) (*Booking, error) {
 		CheckOut:       raw.CheckOut,
 		Guests:         raw.Guests,
 		TotalPrice:     raw.TotalPrice,
+		DepositAmount:  raw.DepositAmount,
+		MPPaymentID:    raw.MPPaymentID,
 		PaymentMethod:  raw.PaymentMethod,
 		Status:         raw.Status,
 	}, nil

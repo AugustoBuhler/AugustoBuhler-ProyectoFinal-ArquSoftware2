@@ -5,7 +5,7 @@ import {
   Calendar, User, Mail, Phone, CreditCard, ArrowLeft,
   AlertCircle, Loader2, Home, RefreshCw, ChevronLeft, ChevronRight,
 } from 'lucide-react'
-import { getApartmentById, createBooking } from '../services/api'
+import { getApartmentById, createBooking, createCheckout } from '../services/api'
 import { getAvailableApartmentByType, getApartmentTypes } from '../services/apartmentTypes'
 import { format } from 'date-fns'
 
@@ -358,7 +358,8 @@ const BookingPage = () => {
       }
 
       const booking = await createBooking(buildBookingPayload(apartmentID))
-      navigate(`/confirmation/${booking.id}`)
+      const checkout = await createCheckout(booking.id)
+      navigate(`/reserva/pago/esperando?id=${booking.id}&mp=${encodeURIComponent(checkout.init_point)}${apartmentType ? `&type=${apartmentType}` : ''}`)
     } catch (error) {
       if (isUnavailableError(error)) {
         // Specific apartment is taken → offer alternative
@@ -385,7 +386,8 @@ const BookingPage = () => {
       setApartment(alt)
       const booking = await createBooking(buildBookingPayload(alt.id))
       setModalMode('hidden')
-      navigate(`/confirmation/${booking.id}`)
+      const checkout = await createCheckout(booking.id)
+      navigate(`/reserva/pago/esperando?id=${booking.id}&mp=${encodeURIComponent(checkout.init_point)}${apartmentType ? `&type=${apartmentType}` : ''}`)
     } catch {
       setModalMode('none_available')
     }

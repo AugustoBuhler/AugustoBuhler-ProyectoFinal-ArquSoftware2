@@ -129,7 +129,9 @@ func (c *bookingConsumer) handleMessage(msg amqp.Delivery) {
 
 	log.Printf("[notifications] received event: action=%s, booking_id=%d", action, bookingID)
 
-	if action != "created" {
+	// "created" → reserva admin (email inmediato)
+	// "payment_confirmed" → reserva pública, seña pagada vía MP (email post-pago)
+	if action != "created" && action != "payment_confirmed" {
 		msg.Ack(false)
 		return
 	}
@@ -145,7 +147,7 @@ func (c *bookingConsumer) handleMessage(msg amqp.Delivery) {
 		log.Printf("[notifications] error sending email for booking %d: %v", bookingID, err)
 		// No reintentamos el email para evitar duplicados — solo logueamos
 	} else {
-		log.Printf("[notifications] confirmation email sent for booking %d to %s", bookingID, booking.GuestEmail)
+		log.Printf("[notifications] confirmation email sent for booking %d to %s (action=%s)", bookingID, booking.GuestEmail, action)
 	}
 
 	msg.Ack(false)

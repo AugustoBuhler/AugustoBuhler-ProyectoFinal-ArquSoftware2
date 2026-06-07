@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
-import { motion } from 'framer-motion'
-import { Link } from 'react-router-dom'
-import { Search, Star, Shield, Clock } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Link, useSearchParams, useNavigate } from 'react-router-dom'
+import { Search, Star, Shield, Clock, CheckCircle, X, ClipboardList } from 'lucide-react'
 import { getApartmentTypes } from '../services/apartmentTypes'
 import ApartmentTypeCard from '../components/ApartmentTypeCard'
 
@@ -18,9 +18,17 @@ const HomePage = () => {
   const [types, setTypes] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [confirmedBookingId, setConfirmedBookingId] = useState(null)
+  const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
 
   useEffect(() => {
     loadApartmentTypes()
+    const bookingId = searchParams.get('booking_id')
+    if (searchParams.get('reserva_confirmada') === 'true' && bookingId) {
+      setConfirmedBookingId(bookingId)
+      navigate('/', { replace: true })
+    }
   }, [])
 
   const loadApartmentTypes = async () => {
@@ -39,6 +47,49 @@ const HomePage = () => {
 
   return (
     <div>
+      {/* Booking confirmed banner */}
+      <AnimatePresence>
+        {confirmedBookingId && (
+          <motion.div
+            initial={{ opacity: 0, y: -60 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -60 }}
+            transition={{ type: 'spring', damping: 20, stiffness: 300 }}
+            className="relative z-50 bg-emerald-600 text-white px-4 py-4 shadow-lg"
+          >
+            <div className="max-w-4xl mx-auto flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <CheckCircle className="w-6 h-6 shrink-0" />
+                <div>
+                  <p className="font-semibold text-base leading-tight">
+                    ¡Tu reserva #{confirmedBookingId} fue confirmada!
+                  </p>
+                  <p className="text-emerald-100 text-sm mt-0.5">
+                    Recibirás un email con todos los detalles. Podés seguir explorando nuestros departamentos.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={() => navigate(`/booking-status?id=${confirmedBookingId}`)}
+                  className="inline-flex items-center gap-1.5 bg-white/20 hover:bg-white/30 text-white text-sm font-semibold px-3 py-1.5 rounded-lg transition-colors"
+                >
+                  <ClipboardList className="w-4 h-4" />
+                  Ver reserva
+                </button>
+                <button
+                  onClick={() => setConfirmedBookingId(null)}
+                  className="p-1.5 rounded-lg hover:bg-white/20 transition-colors"
+                  aria-label="Cerrar"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Hero */}
       <div className="relative h-[560px] md:h-[640px] overflow-hidden">
         <img

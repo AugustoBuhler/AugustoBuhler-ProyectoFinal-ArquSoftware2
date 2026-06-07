@@ -6,6 +6,8 @@ import BookingPage from './pages/BookingPage'
 import ConfirmationPage from './pages/ConfirmationPage'
 import SearchPage from './pages/SearchPage'
 import BookingStatusPage from './pages/BookingStatusPage'
+import PaymentResultPage from './pages/PaymentResultPage'
+import PaymentWaitingPage from './pages/PaymentWaitingPage'
 import AdminLoginPage from './pages/AdminLoginPage'
 import AdminDashboard from './pages/AdminDashboard'
 import Navbar from './components/Navbar'
@@ -46,6 +48,8 @@ function App() {
                   <Route path="/booking/:id" element={<BookingPage />} />
                   <Route path="/confirmation/:bookingId" element={<ConfirmationPage />} />
                   <Route path="/booking-status" element={<BookingStatusPage />} />
+                  <Route path="/reserva/pago/resultado" element={<PaymentResultPage />} />
+                  <Route path="/reserva/pago/esperando" element={<PaymentWaitingPage />} />
                 </Routes>
               </main>
               <Footer />
