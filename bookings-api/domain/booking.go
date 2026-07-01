@@ -67,6 +67,7 @@ type Booking struct {
 	DepositPaid      bool       `json:"deposit_paid" bson:"deposit_paid"`
 	MPPaymentID      string     `json:"mp_payment_id,omitempty" bson:"mp_payment_id,omitempty"`
 	MPPreferenceID   string     `json:"mp_preference_id,omitempty" bson:"mp_preference_id,omitempty"`
+	CancelReason     string     `json:"cancel_reason,omitempty" bson:"cancel_reason,omitempty"`
 	CreatedAt        time.Time  `json:"created_at" bson:"created_at"`
 	UpdatedAt        time.Time  `json:"updated_at" bson:"updated_at"`
 }
@@ -91,8 +92,19 @@ type BookingResponse struct {
 	DepositPaid      bool       `json:"deposit_paid"`
 	MPPaymentID      string     `json:"mp_payment_id,omitempty"`
 	MPPreferenceID   string     `json:"mp_preference_id,omitempty"`
+	CancelReason     string     `json:"cancel_reason,omitempty"`
 	CreatedAt        time.Time  `json:"created_at"`
 	UpdatedAt        time.Time  `json:"updated_at"`
+}
+
+type AvailabilityBatchRequest struct {
+	ApartmentIDs []int64 `json:"apartment_ids" binding:"required,min=1"`
+	CheckIn      string  `json:"check_in" binding:"required"`
+	CheckOut     string  `json:"check_out" binding:"required"`
+}
+
+type AvailabilityBatchResponse struct {
+	Available []int64 `json:"available"`
 }
 
 type CheckoutResponse struct {
@@ -137,6 +149,7 @@ func (b *Booking) ToBookingResponse() *BookingResponse {
 		DepositPaid:      b.DepositPaid,
 		MPPaymentID:      b.MPPaymentID,
 		MPPreferenceID:   b.MPPreferenceID,
+		CancelReason:     b.CancelReason,
 		CreatedAt:        b.CreatedAt,
 		UpdatedAt:        b.UpdatedAt,
 	}

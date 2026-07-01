@@ -45,12 +45,7 @@ const PaymentWaitingPage = () => {
   useEffect(() => {
     if (!bookingId) return
     let stopped = false
-
-    const timeoutId = setTimeout(() => {
-      stopped = true
-      setStatus('timeout')
-    }, TIMEOUT_MS)
-
+    const timeoutId = setTimeout(() => { stopped = true; setStatus('timeout') }, TIMEOUT_MS)
     const poll = async () => {
       while (!stopped) {
         try {
@@ -59,37 +54,34 @@ const PaymentWaitingPage = () => {
             clearTimeout(timeoutId)
             setBooking(data)
             setStatus('confirmed')
-            try { mpWindowRef.current?.close() } catch { /* cross-origin close blocked */ }
+            try { mpWindowRef.current?.close() } catch { }
             return
           }
           if (data.status === 'cancelada' || data.status === 'cancelled') {
             clearTimeout(timeoutId)
             setStatus('failed')
-            try { mpWindowRef.current?.close() } catch { /* ignore */ }
+            try { mpWindowRef.current?.close() } catch { }
             return
           }
-        } catch { /* retry silently */ }
+        } catch { }
         await new Promise(r => setTimeout(r, POLL_MS))
       }
     }
-
     poll()
     return () => { stopped = true; clearTimeout(timeoutId) }
   }, [bookingId])
 
   if (!bookingId) {
-    return <div className="max-w-lg mx-auto px-4 py-16 text-center text-gray-500">Reserva no encontrada.</div>
+    return <div className="max-w-lg mx-auto px-4 py-16 text-center text-muted">Reserva no encontrada.</div>
   }
 
   const typeLabel = TYPE_LABELS[apartmentType] || apartmentType || 'Apartamento'
   const backToBookingPath = apartmentType ? `/booking?type=${apartmentType}` : '/'
 
   const handleVerify = async () => {
-    setVerifying(true)
-    setVerifyError('')
+    setVerifying(true); setVerifyError('')
     try {
       await verifyPayment(bookingId)
-      // el polling detectará deposit_paid=true en el próximo ciclo
     } catch (e) {
       setVerifyError(e.response?.data?.error || 'No se encontró un pago aprobado. Verificá que hayas completado el pago en la otra pestaña.')
     } finally {
@@ -98,163 +90,145 @@ const PaymentWaitingPage = () => {
   }
 
   return (
-    <div className="max-w-xl mx-auto px-4 sm:px-6 py-16 text-center">
+    <div className="max-w-xl mx-auto px-6 sm:px-10 py-16 text-center">
       <AnimatePresence mode="wait">
 
-        {/* ── WAITING ── */}
+        {/* WAITING */}
         {status === 'waiting' && (
-          <motion.div key="waiting" initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-            className="bg-white rounded-2xl shadow-xl p-10"
+          <motion.div key="waiting" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+            className="border border-hairline bg-paper p-10"
+            style={{ borderRadius: '4px' }}
           >
-            <div className="w-20 h-20 rounded-full bg-indigo-100 flex items-center justify-center mx-auto mb-6">
+            <div className="w-16 h-16 rounded-full border border-hairline bg-[#efece6] flex items-center justify-center mx-auto mb-6">
               <motion.div animate={{ rotate: 360 }} transition={{ duration: 1.2, repeat: Infinity, ease: 'linear' }}>
-                <Loader2 className="w-10 h-10 text-indigo-600" />
+                <Loader2 className="w-8 h-8 text-primary-600" />
               </motion.div>
             </div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-3">Esperando confirmación de pago</h1>
-            <p className="text-gray-500 mb-2">El checkout de Mercado Pago se abrió en otra pestaña.</p>
-            <p className="text-gray-400 text-sm mb-6">Completá el pago allí. Esta página se actualizará sola.</p>
-            <p className="text-sm text-gray-400 mb-4">Reserva <span className="font-semibold text-gray-600">#{bookingId}</span></p>
+            <h1 className="font-display text-[22px] font-bold text-ink mb-3">Esperando confirmación de pago</h1>
+            <p className="text-ink-soft text-sm mb-2">El checkout de Mercado Pago se abrió en otra pestaña.</p>
+            <p className="text-muted text-sm mb-6">Completá el pago allí. Esta página se actualizará sola.</p>
+            <p className="text-sm text-muted mb-4">Reserva <span className="font-semibold text-ink">#{bookingId}</span></p>
             {initPoint && (
               <a href={decodeURIComponent(initPoint)} target="_blank" rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 text-indigo-600 text-sm font-medium hover:underline"
+                className="inline-flex items-center gap-2 text-primary-600 text-sm font-medium hover:border-b hover:border-primary-600 transition-all"
               >
                 <ExternalLink className="w-4 h-4" />
                 Abrir Mercado Pago de nuevo
               </a>
             )}
 
-            <div className="mt-6 pt-6 border-t border-gray-100">
-              <p className="text-xs text-gray-400 mb-3">¿Ya completaste el pago y esta página no se actualizó?</p>
+            <div className="mt-6 pt-6 border-t border-hairline">
+              <p className="text-xs text-muted mb-3">¿Ya completaste el pago y esta página no se actualizó?</p>
               <button
                 onClick={handleVerify}
                 disabled={verifying}
-                className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-colors"
+                className="inline-flex items-center gap-2 btn-primary text-sm py-2.5 px-5 disabled:opacity-50"
               >
                 {verifying
                   ? <><Loader2 className="w-4 h-4 animate-spin" /> Verificando...</>
                   : <><RefreshCw className="w-4 h-4" /> Ya pagué — verificar ahora</>
                 }
               </button>
-              {verifyError && (
-                <p className="mt-2 text-xs text-red-500">{verifyError}</p>
-              )}
+              {verifyError && <p className="mt-2 text-xs text-red-500">{verifyError}</p>}
             </div>
           </motion.div>
         )}
 
-        {/* ── CONFIRMED ── */}
+        {/* CONFIRMED */}
         {status === 'confirmed' && booking && (
-          <motion.div key="confirmed" initial={{ opacity: 0, scale: 0.88 }} animate={{ opacity: 1, scale: 1 }}
+          <motion.div key="confirmed" initial={{ opacity: 0, scale: 0.92 }} animate={{ opacity: 1, scale: 1 }}
             transition={{ type: 'spring', damping: 20, stiffness: 260 }}
-            className="bg-white rounded-2xl shadow-xl overflow-hidden"
+            className="border border-hairline bg-paper overflow-hidden"
+            style={{ borderRadius: '4px' }}
           >
-            {/* Header */}
-            <div className="bg-gradient-to-r from-emerald-500 to-teal-600 px-8 py-8 text-center">
-              <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-4">
-                <CheckCircle className="w-9 h-9 text-white" />
+            <div className="bg-ink px-8 py-8 text-center">
+              <div className="w-14 h-14 rounded-full border border-paper/20 flex items-center justify-center mx-auto mb-4">
+                <CheckCircle className="w-8 h-8 text-paper" />
               </div>
-              <h1 className="text-2xl font-bold text-white mb-1">¡Seña confirmada!</h1>
-              <p className="text-emerald-100 text-sm">Recibirás un email con todos los detalles</p>
+              <h1 className="font-display text-[22px] font-bold text-paper mb-1">¡Seña confirmada!</h1>
+              <p className="text-paper/50 text-sm">Recibirás un email con todos los detalles</p>
             </div>
 
-            {/* Booking ID */}
             <div className="px-8 pt-6 pb-2 text-center">
-              <div className="inline-block bg-emerald-50 border-2 border-emerald-200 rounded-xl px-6 py-3">
-                <p className="text-xs font-semibold text-emerald-600 uppercase tracking-widest mb-1">Número de reserva</p>
-                <p className="text-3xl font-extrabold text-emerald-700">#{booking.id}</p>
+              <div className="inline-block border border-primary-200 bg-primary-50 px-6 py-3" style={{ borderRadius: '4px' }}>
+                <p className="text-xs font-semibold text-primary-600 uppercase tracking-widest mb-1">Número de reserva</p>
+                <p className="font-display text-3xl font-bold text-primary-600">#{booking.id}</p>
               </div>
             </div>
 
-            {/* Details */}
             <div className="px-8 py-4">
-              <div className="bg-gray-50 rounded-xl border border-gray-200 overflow-hidden divide-y divide-gray-200 text-left">
-
-                <div className="flex items-center gap-3 px-4 py-3">
-                  <Tag className="w-4 h-4 text-gray-400 shrink-0" />
-                  <span className="text-sm text-gray-500 w-32">Tipo</span>
-                  <span className="text-sm font-semibold text-gray-800">Habitación {typeLabel}</span>
+              <div className="border border-hairline overflow-hidden divide-y divide-hairline text-left" style={{ borderRadius: '4px' }}>
+                {[
+                  { Icon: Tag,        label: 'Tipo',          value: `Habitación ${typeLabel}` },
+                  { Icon: Calendar,   label: 'Check-in',      value: formatDate(booking.check_in) },
+                  { Icon: Calendar,   label: 'Check-out',     value: formatDate(booking.check_out) },
+                  { Icon: Users,      label: 'Huéspedes',     value: `${booking.guests} persona${booking.guests !== 1 ? 's' : ''}` },
+                ].map(({ Icon, label, value }) => (
+                  <div key={label} className="flex items-center gap-3 px-4 py-3 bg-paper">
+                    <Icon className="w-4 h-4 text-muted flex-shrink-0" />
+                    <span className="text-sm text-ink-soft w-32">{label}</span>
+                    <span className="text-sm font-semibold text-ink">{value}</span>
+                  </div>
+                ))}
+                <div className="flex items-center gap-3 px-4 py-3 bg-primary-50">
+                  <CreditCard className="w-4 h-4 text-primary-600 flex-shrink-0" />
+                  <span className="text-sm text-primary-700 w-32">Total reserva</span>
+                  <span className="text-sm font-bold text-primary-700">{formatPrice(booking.total_price)}</span>
                 </div>
-
-                <div className="flex items-center gap-3 px-4 py-3">
-                  <Calendar className="w-4 h-4 text-gray-400 shrink-0" />
-                  <span className="text-sm text-gray-500 w-32">Check-in</span>
-                  <span className="text-sm font-semibold text-gray-800">{formatDate(booking.check_in)}</span>
-                </div>
-
-                <div className="flex items-center gap-3 px-4 py-3">
-                  <Calendar className="w-4 h-4 text-gray-400 shrink-0" />
-                  <span className="text-sm text-gray-500 w-32">Check-out</span>
-                  <span className="text-sm font-semibold text-gray-800">{formatDate(booking.check_out)}</span>
-                </div>
-
-                <div className="flex items-center gap-3 px-4 py-3">
-                  <Users className="w-4 h-4 text-gray-400 shrink-0" />
-                  <span className="text-sm text-gray-500 w-32">Huéspedes</span>
-                  <span className="text-sm font-semibold text-gray-800">{booking.guests} persona{booking.guests !== 1 ? 's' : ''}</span>
-                </div>
-
-                <div className="flex items-center gap-3 px-4 py-3 bg-amber-50">
-                  <CreditCard className="w-4 h-4 text-amber-500 shrink-0" />
-                  <span className="text-sm text-amber-700 w-32">Total reserva</span>
-                  <span className="text-sm font-bold text-amber-700">{formatPrice(booking.total_price)}</span>
-                </div>
-
                 <div className="flex items-center gap-3 px-4 py-3 bg-emerald-50">
-                  <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" />
+                  <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0" />
                   <span className="text-sm text-emerald-700 w-32">Seña pagada (30%)</span>
                   <span className="text-sm font-bold text-emerald-700">−{formatPrice(booking.deposit_amount)}</span>
                 </div>
-
-                <div className="flex items-center gap-3 px-4 py-3">
-                  <span className="w-4 h-4 shrink-0" />
-                  <span className="text-sm text-gray-500 w-32">Saldo al ingreso</span>
-                  <span className="text-sm font-semibold text-gray-800">{formatPrice(booking.total_price - booking.deposit_amount)}</span>
+                <div className="flex items-center gap-3 px-4 py-3 bg-paper">
+                  <span className="w-4 h-4 flex-shrink-0" />
+                  <span className="text-sm text-ink-soft w-32">Saldo al ingreso</span>
+                  <span className="text-sm font-semibold text-ink">{formatPrice(booking.total_price - booking.deposit_amount)}</span>
                 </div>
               </div>
             </div>
 
-            {/* Actions */}
             <div className="px-8 pb-8 pt-2 flex flex-col sm:flex-row gap-3">
-              <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+              <button
                 onClick={() => navigate('/')}
-                className="flex-1 inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-5 py-3 rounded-xl transition-colors"
+                className="flex-1 btn-primary text-sm py-3"
               >
                 Volver a Inicio
-              </motion.button>
-              <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+              </button>
+              <button
                 onClick={() => navigate(`/booking-status?id=${booking.id}`)}
-                className="flex-1 inline-flex items-center justify-center gap-2 border border-gray-300 text-gray-700 font-semibold px-5 py-3 rounded-xl hover:bg-gray-50 transition-colors"
+                className="flex-1 btn-secondary text-sm py-3"
               >
                 Ver mi reserva
-              </motion.button>
+              </button>
             </div>
           </motion.div>
         )}
 
-        {/* ── FAILED / TIMEOUT ── */}
+        {/* FAILED / TIMEOUT */}
         {(status === 'failed' || status === 'timeout') && (
-          <motion.div key="failed" initial={{ opacity: 0, scale: 0.88 }} animate={{ opacity: 1, scale: 1 }}
+          <motion.div key="failed" initial={{ opacity: 0, scale: 0.92 }} animate={{ opacity: 1, scale: 1 }}
             transition={{ type: 'spring', damping: 20, stiffness: 260 }}
-            className="bg-white rounded-2xl shadow-xl p-10"
+            className="border border-hairline bg-paper p-10"
+            style={{ borderRadius: '4px' }}
           >
-            <div className="w-20 h-20 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-6">
-              <XCircle className="w-10 h-10 text-red-500" />
+            <div className="w-16 h-16 rounded-full border border-red-200 bg-red-50 flex items-center justify-center mx-auto mb-6">
+              <XCircle className="w-8 h-8 text-red-500" />
             </div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-3">
+            <h1 className="font-display text-[22px] font-bold text-ink mb-3">
               {status === 'timeout' ? 'Tiempo de espera agotado' : 'Pago no procesado'}
             </h1>
-            <p className="text-gray-600 mb-8">
+            <p className="text-ink-soft text-sm mb-8">
               {status === 'timeout'
                 ? 'No se detectó confirmación del pago. Podés intentarlo de nuevo.'
                 : 'Hubo un problema con el pago. No se realizó ningún cargo.'}
             </p>
-            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+            <button
               onClick={() => navigate('/')}
-              className="inline-flex items-center justify-center gap-2 bg-gray-800 hover:bg-gray-900 text-white font-semibold px-6 py-3 rounded-xl transition-colors"
+              className="btn-primary text-sm py-3 px-6"
             >
               Volver a Inicio
-            </motion.button>
+            </button>
           </motion.div>
         )}
 

@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"net"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -30,6 +32,9 @@ type BookingService interface {
 	MarkAsPaid(ctx context.Context, id int64, dollarRate float64) (*domain.Booking, error)
 	MarkExpiredBookingsAsCompleted(ctx context.Context) (int, error)
 	CancelExpiredPendingBookings(ctx context.Context) (int, error)
+	CancelBookingByGuest(ctx context.Context, id int64, reason string) (*domain.Booking, error)
+	GetBookingsByGuestContact(ctx context.Context, dni, email string) ([]*domain.Booking, error)
+	CheckAvailabilityBatch(ctx context.Context, req domain.AvailabilityBatchRequest) (*domain.AvailabilityBatchResponse, error)
 	CreateCheckout(ctx context.Context, bookingID int64) (*domain.CheckoutResponse, error)
 	ConfirmPaymentFromWebhook(ctx context.Context, paymentID string) error
 	VerifyPayment(ctx context.Context, bookingID int64) error
@@ -96,6 +101,11 @@ func (s *bookingService) CreateBooking(ctx context.Context, req domain.CreateBoo
 
 	if checkOut.Before(checkIn) || checkOut.Equal(checkIn) {
 		return nil, errors.New("check_out must be after check_in")
+	}
+
+	// Validar que el dominio del email tiene registros MX (evita emails con dominios inexistentes)
+	if err := validateEmailDomain(req.GuestInfo.Email); err != nil {
+		return nil, err
 	}
 
 	// check_in no puede ser en el pasado (comparar solo fechas, sin hora)
@@ -765,7 +775,8 @@ func (s *bookingService) CreateCheckout(ctx context.Context, bookingID int64) (*
 	return checkout, nil
 }
 
-// ConfirmPaymentFromWebhook procesa la notificación de pago aprobado de Mercado Pago
+// ConfirmPaymentFromWebhook procesa la notificación de pago aprobado de Mercado Pago.
+// Es idempotente: si el pago ya fue confirmado, retorna nil sin hacer nada.
 func (s *bookingService) ConfirmPaymentFromWebhook(ctx context.Context, paymentID string) error {
 	if s.mpClient == nil {
 		return errors.New("payment gateway not configured")
@@ -789,11 +800,19 @@ func (s *bookingService) ConfirmPaymentFromWebhook(ctx context.Context, paymentI
 		return fmt.Errorf("invalid external_reference %q: %w", externalRef, err)
 	}
 
+	// Idempotencia: si ya está confirmado, no procesar de nuevo
+	booking, err := s.bookingRepo.GetByID(ctx, bookingID)
+	if err != nil {
+		return fmt.Errorf("failed to get booking: %w", err)
+	}
+	if booking.DepositPaid {
+		return nil
+	}
+
 	if err := s.bookingRepo.MarkDepositPaid(ctx, bookingID, paymentID); err != nil {
 		return fmt.Errorf("failed to mark deposit as paid: %w", err)
 	}
 
-	// Pasar de "pendiente_pago" a "reservada" — el pago confirmó la reserva
 	if err := s.bookingRepo.UpdateStatus(ctx, bookingID, "reservada"); err != nil {
 		return fmt.Errorf("failed to update booking status to reservada: %w", err)
 	}
@@ -833,6 +852,74 @@ func (s *bookingService) VerifyPayment(ctx context.Context, bookingID int64) err
 	return s.ConfirmPaymentFromWebhook(ctx, paymentID)
 }
 
+// CheckAvailabilityBatch recibe una lista de apartment IDs y un rango de fechas,
+// y devuelve solo los IDs que están disponibles (sin reservas activas en ese período).
+func (s *bookingService) CheckAvailabilityBatch(ctx context.Context, req domain.AvailabilityBatchRequest) (*domain.AvailabilityBatchResponse, error) {
+	checkIn, err := time.Parse("2006-01-02", req.CheckIn)
+	if err != nil {
+		return nil, fmt.Errorf("check_in inválido: %w", err)
+	}
+	checkOut, err := time.Parse("2006-01-02", req.CheckOut)
+	if err != nil {
+		return nil, fmt.Errorf("check_out inválido: %w", err)
+	}
+	if !checkOut.After(checkIn) {
+		return nil, errors.New("check_out debe ser posterior a check_in")
+	}
+
+	booked, err := s.bookingRepo.GetBookedApartmentIDs(ctx, req.ApartmentIDs, checkIn, checkOut)
+	if err != nil {
+		return nil, fmt.Errorf("error consultando disponibilidad: %w", err)
+	}
+
+	available := make([]int64, 0, len(req.ApartmentIDs))
+	for _, id := range req.ApartmentIDs {
+		if !booked[id] {
+			available = append(available, id)
+		}
+	}
+
+	return &domain.AvailabilityBatchResponse{Available: available}, nil
+}
+
+// GetBookingsByGuestContact busca reservas de un huésped por DNI y email
+func (s *bookingService) GetBookingsByGuestContact(ctx context.Context, dni, email string) ([]*domain.Booking, error) {
+	if dni == "" || email == "" {
+		return nil, errors.New("DNI y email son requeridos")
+	}
+	bookings, err := s.bookingRepo.FindByDNIAndEmail(ctx, dni, email)
+	if err != nil {
+		return nil, fmt.Errorf("error buscando reservas: %w", err)
+	}
+	return bookings, nil
+}
+
+// CancelBookingByGuest cancela una reserva por solicitud del huésped, guardando el motivo.
+// Solo se puede cancelar si la reserva está en estado "reservada".
+func (s *bookingService) CancelBookingByGuest(ctx context.Context, id int64, reason string) (*domain.Booking, error) {
+	booking, err := s.bookingRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if booking.Status != "reservada" {
+		return nil, fmt.Errorf("solo se pueden cancelar reservas en estado 'reservada', estado actual: %s", booking.Status)
+	}
+
+	if err := s.bookingRepo.CancelWithReason(ctx, id, reason); err != nil {
+		return nil, fmt.Errorf("error al cancelar la reserva: %w", err)
+	}
+
+	booking.Status = "cancelada"
+	booking.CancelReason = reason
+
+	if err := s.rmqClient.PublishBookingEvent("guest_cancelled", id); err != nil {
+		fmt.Printf("[CancelBookingByGuest] warning: failed to publish event: %v\n", err)
+	}
+
+	return booking, nil
+}
+
 // CancelExpiredPendingBookings cancela reservas públicas que llevan más de 30 minutos sin pagar la seña
 func (s *bookingService) CancelExpiredPendingBookings(ctx context.Context) (int, error) {
 	return s.bookingRepo.CancelExpiredPendingBookings(ctx, 30*time.Minute)
@@ -863,4 +950,21 @@ func (s *bookingService) MarkExpiredBookingsAsCompleted(ctx context.Context) (in
 	}
 
 	return completedCount, nil
+}
+
+// validateEmailDomain verifica que el dominio del email tiene registros MX (servidores de correo).
+// Evita reservas con emails de dominios inexistentes antes de intentar enviar un email.
+// No valida que el mailbox exista — solo que el dominio sea capaz de recibir emails.
+func validateEmailDomain(email string) error {
+	parts := strings.Split(email, "@")
+	if len(parts) != 2 || parts[1] == "" {
+		return errors.New("email inválido")
+	}
+	domain := parts[1]
+
+	mxRecords, err := net.LookupMX(domain)
+	if err != nil || len(mxRecords) == 0 {
+		return fmt.Errorf("el email '%s' no parece válido: el dominio '%s' no puede recibir correos", email, domain)
+	}
+	return nil
 }

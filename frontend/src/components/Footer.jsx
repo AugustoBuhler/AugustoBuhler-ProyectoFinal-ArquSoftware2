@@ -1,73 +1,82 @@
-import { motion } from 'framer-motion'
-import { Mail, Phone, Instagram, Facebook, MessageCircle } from 'lucide-react'
-
 const Footer = () => {
   return (
-    <footer className="mt-16 border-t border-gray-200 bg-gradient-to-r from-amber-50 via-white to-sky-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 grid grid-cols-1 md:grid-cols-3 gap-8 text-sm text-gray-700">
-        <div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-3">Apartamentos Temporales</h3>
-          <p className="text-gray-600">
-            Departamentos amoblados pensados para estadías cómodas y modernas, ya sea por trabajo
-            o turismo.
-          </p>
-        </div>
+    <footer className="border-t border-hairline mt-16 pt-16 pb-10">
+      <div className="max-w-6xl mx-auto px-10">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-12 mb-16">
+          <div>
+            <div className="flex items-center gap-2.5 mb-4">
+              <span className="w-[9px] h-[9px] rounded-full bg-primary-600 flex-shrink-0" />
+              <span className="font-display font-bold text-[15px] tracking-[0.04em] uppercase text-ink">
+                Docta Suites
+              </span>
+            </div>
+            <p className="text-[15px] text-ink-soft leading-relaxed max-w-[30ch]">
+              Departamentos amoblados pensados para estadías cómodas y modernas, ya sea por trabajo o turismo.
+            </p>
+          </div>
 
-        <div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-3">Contacto</h3>
-          <ul className="space-y-2">
-            <li className="flex items-center space-x-2">
-              <Phone className="w-4 h-4 text-primary-600" />
-              <span>+54 9 351 000 0000</span>
-            </li>
-            <li className="flex items-center space-x-2">
-              <Mail className="w-4 h-4 text-primary-600" />
-              <span>contacto@apartamentostemporales.com</span>
-            </li>
-          </ul>
-        </div>
+          <div>
+            <h4 className="font-display text-[13px] font-medium tracking-[0.16em] uppercase text-muted mb-4">
+              Contacto
+            </h4>
+            <ul className="space-y-2.5 text-[15px] text-ink-soft">
+              <li>
+                <a href="tel:+5493516318393" className="hover:text-primary-600 transition-colors duration-150">
+                  +54 9 351 631 8393
+                </a>
+              </li>
+              <li>
+                <a href="mailto:hola@doctasuites.com" className="hover:text-primary-600 transition-colors duration-150">
+                  hola@doctasuites.com
+                </a>
+              </li>
+              <li className="text-muted">Córdoba, Argentina</li>
+            </ul>
+          </div>
 
-        <div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-3">Redes</h3>
-          <div className="flex items-center space-x-4">
-            <motion.a
-              whileHover={{ scale: 1.05 }}
-              href="https://www.instagram.com/doctasuitesap?utm_source=ig_web_button_share_sheet&igsh=ZDNlZDc0MzIxNw=="
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center space-x-1 text-gray-700 hover:text-pink-600"
-            >
-              <Instagram className="w-5 h-5" />
-              <span>Instagram</span>
-            </motion.a>
-            <motion.a
-              whileHover={{ scale: 1.05 }}
-              href="https://www.facebook.com/profile.php?id=100090876227277&locale=es_LA"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center space-x-1 text-gray-700 hover:text-blue-600"
-            >
-              <Facebook className="w-5 h-5" />
-              <span>Facebook</span>
-            </motion.a>
-            <motion.a
-              whileHover={{ scale: 1.05 }}
-              href="https://api.whatsapp.com/send/?phone=5493516318393&text="
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center space-x-1 text-gray-700 hover:text-green-600"
-            >
-              <MessageCircle className="w-5 h-5" />
-              <span>WhatsApp</span>
-            </motion.a>
+          <div>
+            <h4 className="font-display text-[13px] font-medium tracking-[0.16em] uppercase text-muted mb-4">
+              Redes
+            </h4>
+            <ul className="space-y-2.5 text-[15px] text-ink-soft">
+              <li>
+                <a
+                  href="https://www.instagram.com/doctasuitesap"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:text-primary-600 transition-colors duration-150"
+                >
+                  Instagram
+                </a>
+              </li>
+              <li>
+                <a
+                  href="https://www.facebook.com/profile.php?id=100090876227277"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:text-primary-600 transition-colors duration-150"
+                >
+                  Facebook
+                </a>
+              </li>
+              <li>
+                <a
+                  href="https://api.whatsapp.com/send/?phone=5493516318393"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:text-primary-600 transition-colors duration-150"
+                >
+                  WhatsApp
+                </a>
+              </li>
+            </ul>
           </div>
         </div>
-      </div>
 
-      <div className="border-t border-gray-200 py-4 text-center text-xs text-gray-500">
-        <span>
-          © {new Date().getFullYear()} Apartamentos Temporales. Todos los derechos reservados.
-        </span>
+        <div className="border-t border-hairline pt-6 flex flex-col sm:flex-row justify-between items-center gap-2 text-[13px] text-muted">
+          <span>© {new Date().getFullYear()} Docta Suites. Todos los derechos reservados.</span>
+          <span>Hecho en Córdoba</span>
+        </div>
       </div>
     </footer>
   )

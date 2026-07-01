@@ -37,7 +37,7 @@ function App() {
         <Route
           path="/*"
           element={
-            <div className="min-h-screen flex flex-col bg-gradient-to-br from-amber-50 via-white to-sky-50">
+            <div className="min-h-screen flex flex-col bg-paper">
               <Navbar />
               <main className="flex-1">
                 <Routes>

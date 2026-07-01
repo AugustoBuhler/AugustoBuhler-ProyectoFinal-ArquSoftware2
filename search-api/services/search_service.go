@@ -18,10 +18,11 @@ type SearchService interface {
 }
 
 type searchService struct {
-	solrRepo      repositories.SolrRepository
-	localCache    repositories.LocalCache
-	memcachedCache repositories.MemcachedCache
+	solrRepo         repositories.SolrRepository
+	localCache       repositories.LocalCache
+	memcachedCache   repositories.MemcachedCache
 	apartmentsClient repositories.ApartmentsClient
+	bookingsClient   repositories.BookingsClient
 }
 
 func NewSearchService(
@@ -29,12 +30,14 @@ func NewSearchService(
 	localCache repositories.LocalCache,
 	memcachedCache repositories.MemcachedCache,
 	apartmentsClient repositories.ApartmentsClient,
+	bookingsClient repositories.BookingsClient,
 ) SearchService {
 	return &searchService{
-		solrRepo:        solrRepo,
-		localCache:      localCache,
-		memcachedCache:  memcachedCache,
+		solrRepo:         solrRepo,
+		localCache:       localCache,
+		memcachedCache:   memcachedCache,
 		apartmentsClient: apartmentsClient,
+		bookingsClient:   bookingsClient,
 	}
 }
 
@@ -79,7 +82,29 @@ func (s *searchService) Search(req domain.SearchRequest) (*domain.SearchResponse
 		return nil, err
 	}
 
-	// 4. Guardar en ambas cachés (Cache-aside pattern)
+	// 4. Filtrar por disponibilidad real si se proporcionaron fechas
+	if req.CheckIn != "" && req.CheckOut != "" && len(result.Data) > 0 {
+		ids := make([]int64, 0, len(result.Data))
+		for _, apt := range result.Data {
+			ids = append(ids, apt.ID)
+		}
+
+		available, err := s.bookingsClient.FilterAvailable(ids, req.CheckIn, req.CheckOut)
+		if err == nil {
+			filtered := result.Data[:0]
+			for _, apt := range result.Data {
+				if available[apt.ID] {
+					filtered = append(filtered, apt)
+				}
+			}
+			result.Data = filtered
+			result.Total = int64(len(filtered))
+			result.TotalPages = int(result.Total+int64(req.Size)-1) / req.Size
+		}
+		// Si bookings-api falla, devolvemos los resultados sin filtrar (degradación elegante)
+	}
+
+	// 5. Guardar en ambas cachés (Cache-aside pattern)
 	s.localCache.Set(cacheKey, result, 5*time.Minute)
 	s.memcachedCache.Set(cacheKey, result, 15*time.Minute)
 
@@ -91,13 +116,21 @@ func (s *searchService) IndexApartment(apt *domain.ApartmentSearchResult) error 
 }
 
 func (s *searchService) UpdateApartment(apt *domain.ApartmentSearchResult) error {
-	// Invalidar cachés relacionadas
-	// Por simplicidad, invalidamos todas las búsquedas (en producción usar tags)
-	return s.solrRepo.UpdateApartment(apt)
+	if err := s.solrRepo.UpdateApartment(apt); err != nil {
+		return err
+	}
+	// Invalida ambas cachés para que el cambio de disponibilidad sea inmediato
+	s.localCache.Flush()
+	s.memcachedCache.Flush()
+	return nil
 }
 
 func (s *searchService) DeleteApartment(id int64) error {
-	// Invalidar cachés relacionadas
-	return s.solrRepo.DeleteApartment(id)
+	if err := s.solrRepo.DeleteApartment(id); err != nil {
+		return err
+	}
+	s.localCache.Flush()
+	s.memcachedCache.Flush()
+	return nil
 }
 

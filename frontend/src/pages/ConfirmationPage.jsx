@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { CheckCircle, Calendar, MapPin, Users, DollarSign } from 'lucide-react'
+import { CheckCircle, Calendar, Users, DollarSign } from 'lucide-react'
 import { getBookingById } from '../services/api'
 import { formatDate } from '../utils/dateUtils'
 
@@ -13,15 +13,9 @@ const ConfirmationPage = () => {
   useEffect(() => {
     const loadBooking = async () => {
       try {
-        // Obtener datos de la reserva directamente desde la API (base de datos)
         const data = await getBookingById(bookingId)
-        // Normalizar fechas a string YYYY-MM-DD por si axios las convirtió a Date
-        if (data.check_in instanceof Date) {
-          data.check_in = data.check_in.toISOString().split('T')[0]
-        }
-        if (data.check_out instanceof Date) {
-          data.check_out = data.check_out.toISOString().split('T')[0]
-        }
+        if (data.check_in instanceof Date) data.check_in = data.check_in.toISOString().split('T')[0]
+        if (data.check_out instanceof Date) data.check_out = data.check_out.toISOString().split('T')[0]
         setBooking(data)
       } catch (error) {
         console.error('Error loading booking:', error)
@@ -34,11 +28,11 @@ const ConfirmationPage = () => {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center min-h-screen">
+      <div className="flex justify-center items-center min-h-screen gap-3 text-muted">
         <motion.div
           animate={{ rotate: 360 }}
           transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-          className="w-16 h-16 border-4 border-primary-600 border-t-transparent rounded-full"
+          className="w-6 h-6 border-2 border-primary-600 border-t-transparent rounded-full"
         />
       </div>
     )
@@ -46,8 +40,8 @@ const ConfirmationPage = () => {
 
   if (!booking) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+      <div className="max-w-6xl mx-auto px-10 py-8">
+        <div className="border border-red-200 bg-red-50 text-red-700 px-4 py-3 rounded text-sm">
           Reserva no encontrada
         </div>
       </div>
@@ -55,99 +49,76 @@ const ConfirmationPage = () => {
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <div className="max-w-3xl mx-auto px-10 py-14">
       <motion.div
-        initial={{ opacity: 0, scale: 0.8 }}
-        animate={{ opacity: 1, scale: 1 }}
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="text-center mb-8"
+        className="text-center mb-10"
       >
         <motion.div
           initial={{ scale: 0 }}
           animate={{ scale: 1 }}
           transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
-          className="inline-block mb-4"
+          className="inline-block mb-5"
         >
-          <CheckCircle className="w-24 h-24 text-green-500" />
+          <CheckCircle className="w-20 h-20 text-primary-600" />
         </motion.div>
-        <h1 className="text-4xl font-bold text-gray-800 mb-2">
+        <h1 className="font-display font-bold text-ink text-[36px] tracking-tight mb-2">
           ¡Reserva Confirmada!
         </h1>
-        <p className="text-xl text-gray-600">
-          Tu reserva ha sido procesada exitosamente
-        </p>
+        <p className="text-ink-soft text-lg">Tu reserva ha sido procesada exitosamente</p>
       </motion.div>
 
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
+        initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.3 }}
-        className="bg-white rounded-2xl shadow-xl p-8 mb-8"
+        className="border border-hairline bg-paper p-8 mb-8"
+        style={{ borderRadius: '4px' }}
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-          <div className="flex items-start space-x-3">
-            <Calendar className="w-6 h-6 text-primary-600 mt-1" />
-            <div>
-              <p className="text-sm text-gray-600">Check-in</p>
-              <p className="font-semibold text-gray-800">
-                {formatDate(booking.check_in)}
-              </p>
+          {[
+            { Icon: Calendar, label: 'Check-in', value: formatDate(booking.check_in) },
+            { Icon: Calendar, label: 'Check-out', value: formatDate(booking.check_out) },
+            { Icon: Users,    label: 'Huéspedes', value: booking.guests },
+            { Icon: DollarSign, label: 'Total Pagado', value: `$${booking.total_price?.toLocaleString('es-AR')}` },
+          ].map(({ Icon, label, value }) => (
+            <div key={label} className="flex items-start gap-3">
+              <Icon className="w-5 h-5 text-primary-600 mt-1 flex-shrink-0" />
+              <div>
+                <p className="text-xs text-muted mb-0.5">{label}</p>
+                <p className="font-semibold text-ink">{value}</p>
+              </div>
             </div>
-          </div>
-          <div className="flex items-start space-x-3">
-            <Calendar className="w-6 h-6 text-primary-600 mt-1" />
-            <div>
-              <p className="text-sm text-gray-600">Check-out</p>
-              <p className="font-semibold text-gray-800">
-                {formatDate(booking.check_out)}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-start space-x-3">
-            <Users className="w-6 h-6 text-primary-600 mt-1" />
-            <div>
-              <p className="text-sm text-gray-600">Huéspedes</p>
-              <p className="font-semibold text-gray-800">{booking.guests}</p>
-            </div>
-          </div>
-          <div className="flex items-start space-x-3">
-            <DollarSign className="w-6 h-6 text-primary-600 mt-1" />
-            <div>
-              <p className="text-sm text-gray-600">Total Pagado</p>
-              <p className="font-semibold text-gray-800">${booking.total_price}</p>
-            </div>
+          ))}
+        </div>
+
+        <div className="border-t border-hairline pt-6">
+          <h3 className="font-display text-base font-bold text-ink mb-4">Datos del Huésped</h3>
+          <div className="space-y-1.5 text-ink-soft text-sm">
+            <p><span className="font-semibold text-ink">Nombre:</span> {booking.user_info.first_name} {booking.user_info.last_name}</p>
+            <p><span className="font-semibold text-ink">DNI:</span> {booking.user_info.dni}</p>
+            <p><span className="font-semibold text-ink">Teléfono:</span> {booking.user_info.phone}</p>
+            <p><span className="font-semibold text-ink">Email:</span> {booking.user_info.email}</p>
+            <p><span className="font-semibold text-ink">Método de Pago:</span> {booking.payment_method === 'transferencia' ? 'Transferencia Bancaria' : 'Efectivo'}</p>
           </div>
         </div>
 
-        <div className="border-t pt-6">
-          <h3 className="text-lg font-bold text-gray-800 mb-4">Datos del Huésped</h3>
-          <div className="space-y-2 text-gray-700">
-            <p><span className="font-semibold">Nombre:</span> {booking.user_info.first_name} {booking.user_info.last_name}</p>
-            <p><span className="font-semibold">DNI:</span> {booking.user_info.dni}</p>
-            <p><span className="font-semibold">Teléfono:</span> {booking.user_info.phone}</p>
-            <p><span className="font-semibold">Email:</span> {booking.user_info.email}</p>
-            <p><span className="font-semibold">Método de Pago:</span> {booking.payment_method === 'transferencia' ? 'Transferencia Bancaria' : 'Efectivo'}</p>
-          </div>
-        </div>
-
-        <div className="mt-6 p-4 bg-primary-50 rounded-lg">
-          <p className="text-sm text-gray-700">
+        <div className="mt-6 border border-hairline bg-[#efece6] px-5 py-4 rounded-sm">
+          <p className="text-sm text-ink">
             <span className="font-semibold">Número de Reserva:</span> #{booking.id}
           </p>
-          <p className="text-xs text-gray-600 mt-1">
-            Guarda este número para futuras consultas
-          </p>
+          <p className="text-xs text-muted mt-1">Guardá este número para futuras consultas</p>
         </div>
       </motion.div>
 
       <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.5 }}
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}
         className="text-center"
       >
-        <Link to="/" className="btn-primary inline-block">
-          Volver a Buscar Apartamentos
+        <Link to="/" className="btn-primary text-base px-8 py-4">
+          Volver a Inicio
         </Link>
       </motion.div>
     </div>
@@ -155,4 +126,3 @@ const ConfirmationPage = () => {
 }
 
 export default ConfirmationPage
-

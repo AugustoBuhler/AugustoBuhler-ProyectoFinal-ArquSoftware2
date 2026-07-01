@@ -1,81 +1,56 @@
 import { NavLink, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Home, Search, Settings, ClipboardList } from 'lucide-react'
 
 const Navbar = () => {
   return (
-    <motion.nav
-      initial={{ y: -100 }}
-      animate={{ y: 0 }}
-      transition={{ duration: 0.5 }}
-      className="bg-white/90 backdrop-blur shadow-sm sticky top-0 z-50"
+    <motion.header
+      initial={{ y: -80, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      transition={{ duration: 0.4, ease: 'easeOut' }}
+      className="sticky top-0 z-50 border-b border-hairline"
+      style={{ background: 'color-mix(in oklab, #f7f5f2 88%, transparent)', backdropFilter: 'blur(12px)' }}
     >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16">
-          <Link to="/" className="flex items-center space-x-2 group">
-            <motion.div
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.9 }}
-            >
-              <Home className="w-6 h-6 text-primary-600" />
-            </motion.div>
-            <span className="text-xl font-bold text-gray-800 group-hover:text-primary-600 transition-colors">
-              Apartamentos Temporales
-            </span>
-          </Link>
-          
-          <div className="flex items-center space-x-4">
-            <NavLink
-              to="/"
-              className={({ isActive }) =>
-                `flex items-center space-x-2 text-sm font-medium transition-colors ${
-                  isActive ? 'text-primary-600' : 'text-gray-600 hover:text-primary-600'
-                }`
-              }
-            >
-              <Search className="w-5 h-5" />
-              <span className="hidden sm:inline">Inicio</span>
-            </NavLink>
-            <NavLink
-              to="/search"
-              className={({ isActive }) =>
-                `text-sm font-medium transition-colors ${
-                  isActive ? 'text-primary-600' : 'text-gray-600 hover:text-primary-600'
-                }`
-              }
-            >
-              Departamentos
-            </NavLink>
-            <NavLink
-              to="/booking-status"
-              className={({ isActive }) =>
-                `flex items-center space-x-1.5 text-sm font-medium px-3 py-1.5 rounded-lg transition-colors ${
-                  isActive
-                    ? 'bg-primary-600 text-white'
-                    : 'bg-primary-50 text-primary-700 hover:bg-primary-100'
-                }`
-              }
-            >
-              <ClipboardList className="w-4 h-4" />
-              <span>Mi Reserva</span>
-            </NavLink>
-            <NavLink
-              to="/admin/login"
-              className={({ isActive }) =>
-                `flex items-center space-x-2 text-sm font-medium transition-colors ${
-                  isActive ? 'text-primary-600' : 'text-gray-600 hover:text-primary-600'
-                }`
-              }
-            >
-              <Settings className="w-5 h-5" />
-              <span className="hidden sm:inline">Admin</span>
-            </NavLink>
-          </div>
+      <nav className="max-w-6xl mx-auto px-10 h-[72px] flex items-center justify-between gap-8">
+        <Link to="/" className="flex items-center gap-2.5 group" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
+          <span className="w-[9px] h-[9px] rounded-full bg-primary-600 flex-shrink-0" />
+          <span className="font-display font-bold text-[19px] tracking-[0.04em] uppercase text-ink group-hover:text-primary-600 transition-colors duration-150">
+            Docta Suites
+          </span>
+        </Link>
+
+        <div className="flex items-center gap-8">
+          <NavLink
+            to="/search"
+            className={({ isActive }) =>
+              `text-[15px] font-medium transition-colors duration-150 ${isActive ? 'text-ink' : 'text-ink-soft hover:text-ink'}`
+            }
+          >
+            Departamentos
+          </NavLink>
+          <NavLink
+            to="/booking-status"
+            className={({ isActive }) =>
+              `text-[15px] font-medium transition-colors duration-150 ${isActive ? 'text-ink' : 'text-ink-soft hover:text-ink'}`
+            }
+          >
+            Mi Reserva
+          </NavLink>
+          <NavLink
+            to="/admin/login"
+            className={({ isActive }) =>
+              `text-[13px] font-semibold px-4 py-1.5 rounded-full border transition-colors duration-150 ${
+                isActive
+                  ? 'bg-ink text-paper border-ink'
+                  : 'text-ink-soft border-hairline hover:border-ink hover:text-ink'
+              }`
+            }
+          >
+            Admin
+          </NavLink>
         </div>
-      </div>
-    </motion.nav>
+      </nav>
+    </motion.header>
   )
 }
 
 export default Navbar
-

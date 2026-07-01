@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { getAuthToken } from './auth'
+import { getAuthToken, logout } from './auth'
 
 const APARTMENTS_API_URL = window.location.hostname === 'localhost'
   ? 'http://localhost:8081/api/v1'
@@ -36,22 +36,30 @@ const bookingsAPI = axios.create({
   ],
 })
 
-// Interceptor para agregar token a todas las peticiones
+const handleAuthError = (error) => {
+  if (error.response?.status === 401) {
+    logout()
+    window.location.href = '/admin/login'
+  }
+  return Promise.reject(error)
+}
+
+// Interceptores de request: agregar token
 apartmentsAPI.interceptors.request.use((config) => {
   const token = getAuthToken()
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`
-  }
+  if (token) config.headers.Authorization = `Bearer ${token}`
   return config
 })
 
 bookingsAPI.interceptors.request.use((config) => {
   const token = getAuthToken()
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`
-  }
+  if (token) config.headers.Authorization = `Bearer ${token}`
   return config
 })
+
+// Interceptores de response: redirigir a login si el token expiró
+apartmentsAPI.interceptors.response.use((r) => r, handleAuthError)
+bookingsAPI.interceptors.response.use((r) => r, handleAuthError)
 
 // Apartamentos
 export const getAllApartments = async () => {

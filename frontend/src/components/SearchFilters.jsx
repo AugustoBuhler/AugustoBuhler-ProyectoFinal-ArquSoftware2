@@ -1,23 +1,16 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { Search, MapPin, Users, DollarSign, Calendar } from 'lucide-react'
+import { Users, Calendar, Search } from 'lucide-react'
 
 const SearchFilters = ({ onSearch, loading }) => {
   const [filters, setFilters] = useState({
-    q: '',
-    city: '',
     capacity: '',
-    min_price: '',
-    max_price: '',
     check_in: '',
     check_out: '',
   })
 
   const handleChange = (e) => {
-    setFilters({
-      ...filters,
-      [e.target.name]: e.target.value,
-    })
+    setFilters({ ...filters, [e.target.name]: e.target.value })
   }
 
   const handleSubmit = (e) => {
@@ -30,112 +23,96 @@ const SearchFilters = ({ onSearch, loading }) => {
 
   return (
     <motion.form
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
+      transition={{ duration: 0.4, delay: 0.15 }}
       onSubmit={handleSubmit}
-      className="bg-white rounded-2xl shadow-xl p-6 mb-8"
+      className="w-full"
     >
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-          <input
-            type="text"
-            name="q"
-            value={filters.q}
-            onChange={handleChange}
-            placeholder="Buscar por nombre..."
-            className="input-field pl-10"
-          />
+      <div className="bg-[#efece6] border border-hairline p-6 sm:p-8" style={{ borderRadius: '4px' }}>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+
+          {/* Capacidad */}
+          <div className="flex flex-col gap-2">
+            <label className="font-display text-[12px] font-medium tracking-[0.14em] uppercase text-muted flex items-center gap-1.5">
+              <Users className="w-3.5 h-3.5" />
+              Personas
+            </label>
+            <div className="relative">
+              <input
+                type="number"
+                name="capacity"
+                value={filters.capacity}
+                onChange={handleChange}
+                placeholder="¿Cuántos?"
+                min="1"
+                max="10"
+                className="w-full bg-paper border border-hairline focus:border-ink outline-none px-5 py-3.5 text-ink placeholder-muted transition-colors duration-150 rounded-full text-[15px]"
+              />
+            </div>
+          </div>
+
+          {/* Check-in */}
+          <div className="flex flex-col gap-2">
+            <label className="font-display text-[12px] font-medium tracking-[0.14em] uppercase text-muted flex items-center gap-1.5">
+              <Calendar className="w-3.5 h-3.5" />
+              Entrada
+            </label>
+            <input
+              type="date"
+              name="check_in"
+              value={filters.check_in}
+              onChange={handleChange}
+              className="w-full bg-paper border border-hairline focus:border-ink outline-none px-5 py-3.5 text-ink transition-colors duration-150 rounded-full text-[15px]"
+            />
+          </div>
+
+          {/* Check-out */}
+          <div className="flex flex-col gap-2">
+            <label className="font-display text-[12px] font-medium tracking-[0.14em] uppercase text-muted flex items-center gap-1.5">
+              <Calendar className="w-3.5 h-3.5" />
+              Salida
+            </label>
+            <input
+              type="date"
+              name="check_out"
+              value={filters.check_out}
+              onChange={handleChange}
+              min={filters.check_in || undefined}
+              className="w-full bg-paper border border-hairline focus:border-ink outline-none px-5 py-3.5 text-ink transition-colors duration-150 rounded-full text-[15px]"
+            />
+          </div>
         </div>
 
-        <div className="relative">
-          <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-          <input
-            type="text"
-            name="city"
-            value={filters.city}
-            onChange={handleChange}
-            placeholder="Ciudad"
-            className="input-field pl-10"
-          />
+        {/* Botón */}
+        <div className="mt-5 flex justify-end">
+          <motion.button
+            type="submit"
+            whileHover={{ y: -1 }}
+            whileTap={{ scale: 0.97 }}
+            disabled={loading}
+            className="inline-flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-paper font-display font-semibold text-[15px] px-8 py-3.5 rounded-full transition-all duration-150 disabled:opacity-60"
+          >
+            {loading ? (
+              <>
+                <motion.div
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }}
+                  className="w-4 h-4 border-2 border-paper border-t-transparent rounded-full"
+                />
+                Buscando...
+              </>
+            ) : (
+              <>
+                <Search className="w-4 h-4" />
+                Buscar
+              </>
+            )}
+          </motion.button>
         </div>
-
-        <div className="relative">
-          <Users className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-          <input
-            type="number"
-            name="capacity"
-            value={filters.capacity}
-            onChange={handleChange}
-            placeholder="Capacidad mínima"
-            min="1"
-            className="input-field pl-10"
-          />
-        </div>
-
-        <div className="relative">
-          <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-          <input
-            type="number"
-            name="min_price"
-            value={filters.min_price}
-            onChange={handleChange}
-            placeholder="Precio mínimo"
-            min="0"
-            className="input-field pl-10"
-          />
-        </div>
-
-        <div className="relative">
-          <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-          <input
-            type="number"
-            name="max_price"
-            value={filters.max_price}
-            onChange={handleChange}
-            placeholder="Precio máximo"
-            min="0"
-            className="input-field pl-10"
-          />
-        </div>
-
-        <div className="relative">
-          <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-          <input
-            type="date"
-            name="check_in"
-            value={filters.check_in}
-            onChange={handleChange}
-            className="input-field pl-10"
-          />
-        </div>
-
-        <div className="relative">
-          <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-          <input
-            type="date"
-            name="check_out"
-            value={filters.check_out}
-            onChange={handleChange}
-            min={filters.check_in}
-            className="input-field pl-10"
-          />
-        </div>
-
-        <motion.button
-          type="submit"
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          disabled={loading}
-          className="btn-primary col-span-full md:col-span-1 lg:col-span-1"
-        >
-          {loading ? 'Buscando...' : 'Buscar Apartamentos'}
-        </motion.button>
       </div>
     </motion.form>
   )
 }
 
 export default SearchFilters
-

@@ -25,9 +25,12 @@ type BookingRepository interface {
 	GetNextID(ctx context.Context) (int64, error)
 	GetExpiredPaidBookings(ctx context.Context) ([]*domain.Booking, error)
 	MarkAsPaid(ctx context.Context, id int64, usdAmount float64, exchangeRate float64, paidAt time.Time) error
+	FindByDNIAndEmail(ctx context.Context, dni, email string) ([]*domain.Booking, error)
+	GetBookedApartmentIDs(ctx context.Context, ids []int64, checkIn, checkOut time.Time) (map[int64]bool, error)
 	SaveMPPreferenceID(ctx context.Context, id int64, preferenceID string) error
 	MarkDepositPaid(ctx context.Context, id int64, paymentID string) error
 	CancelExpiredPendingBookings(ctx context.Context, maxAge time.Duration) (int, error)
+	CancelWithReason(ctx context.Context, id int64, reason string) error
 }
 
 type bookingRepository struct {
@@ -351,6 +354,74 @@ func (r *bookingRepository) GetExpiredPaidBookings(ctx context.Context) ([]*doma
 	}
 
 	return bookings, nil
+}
+
+// GetBookedApartmentIDs devuelve el conjunto de IDs que tienen reservas activas en el rango dado.
+// Una sola query MongoDB en lugar de N queries individuales.
+func (r *bookingRepository) GetBookedApartmentIDs(ctx context.Context, ids []int64, checkIn, checkOut time.Time) (map[int64]bool, error) {
+	filter := bson.M{
+		"apartment_id": bson.M{"$in": ids},
+		"status":       bson.M{"$nin": []string{"cancelled", "cancelada", "concluida", "finalizada"}},
+		"check_in":     bson.M{"$lt": checkOut},
+		"check_out":    bson.M{"$gt": checkIn},
+	}
+
+	cursor, err := r.collection.Find(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	booked := make(map[int64]bool)
+	for cursor.Next(ctx) {
+		var b struct {
+			ApartmentID int64 `bson:"apartment_id"`
+		}
+		if err := cursor.Decode(&b); err == nil {
+			booked[b.ApartmentID] = true
+		}
+	}
+	return booked, nil
+}
+
+// FindByDNIAndEmail busca reservas confirmadas de un huésped por DNI y email
+func (r *bookingRepository) FindByDNIAndEmail(ctx context.Context, dni, email string) ([]*domain.Booking, error) {
+	filter := bson.M{
+		"user_info.dni":   dni,
+		"user_info.email": email,
+		"status":          bson.M{"$nin": []string{"pendiente_pago"}},
+	}
+	opts := options.Find().SetSort(bson.D{{Key: "created_at", Value: -1}})
+	cursor, err := r.collection.Find(ctx, filter, opts)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var bookings []*domain.Booking
+	if err := cursor.All(ctx, &bookings); err != nil {
+		return nil, err
+	}
+	return bookings, nil
+}
+
+// CancelWithReason cancela una reserva por parte del huésped guardando el motivo de cancelación
+func (r *bookingRepository) CancelWithReason(ctx context.Context, id int64, reason string) error {
+	update := bson.M{
+		"$set": bson.M{
+			"status":        "cancelada",
+			"cancel_reason": reason,
+			"updated_at":    time.Now().UTC(),
+		},
+	}
+	result, err := r.collection.UpdateOne(ctx, bson.M{"id": id}, update)
+	if err != nil {
+		return err
+	}
+	if result.MatchedCount == 0 {
+		return errors.New("booking not found")
+	}
+	return nil
 }
 
 // CancelExpiredPendingBookings cancela reservas públicas en "pendiente_pago" que superaron maxAge sin pagar

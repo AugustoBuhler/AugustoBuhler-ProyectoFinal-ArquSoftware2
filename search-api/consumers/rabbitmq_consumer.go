@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"search-api/repositories"
+	"search-api/services"
 
 	"github.com/streadway/amqp"
 )
@@ -17,15 +18,15 @@ type RabbitMQConsumer interface {
 }
 
 type rabbitMQConsumer struct {
-	conn            *amqp.Connection
-	channel         *amqp.Channel
+	conn             *amqp.Connection
+	channel          *amqp.Channel
 	apartmentsClient repositories.ApartmentsClient
-	solrRepo        repositories.SolrRepository
+	searchService    services.SearchService
 }
 
 func NewRabbitMQConsumer(
 	apartmentsClient repositories.ApartmentsClient,
-	solrRepo repositories.SolrRepository,
+	searchService services.SearchService,
 ) (RabbitMQConsumer, error) {
 	url := os.Getenv("RABBITMQ_URL")
 	if url == "" {
@@ -94,7 +95,7 @@ func NewRabbitMQConsumer(
 		conn:             conn,
 		channel:          ch,
 		apartmentsClient: apartmentsClient,
-		solrRepo:         solrRepo,
+		searchService:    searchService,
 	}, nil
 }
 
@@ -153,8 +154,8 @@ func (c *rabbitMQConsumer) handleMessage(msg amqp.Delivery) {
 			return
 		}
 
-		// Indexar/actualizar en Solr
-		if err := c.solrRepo.IndexApartment(apt); err != nil {
+		// Actualizar en Solr e invalidar caché
+		if err := c.searchService.UpdateApartment(apt); err != nil {
 			log.Printf("Error indexing apartment %d: %v", id, err)
 			msg.Nack(false, true) // Reintentar
 			return
@@ -163,8 +164,8 @@ func (c *rabbitMQConsumer) handleMessage(msg amqp.Delivery) {
 		log.Printf("Successfully indexed apartment %d", id)
 
 	case "deleted":
-		// Eliminar de Solr
-		if err := c.solrRepo.DeleteApartment(id); err != nil {
+		// Eliminar de Solr e invalidar caché
+		if err := c.searchService.DeleteApartment(id); err != nil {
 			log.Printf("Error deleting apartment %d from Solr: %v", id, err)
 			msg.Nack(false, true) // Reintentar
 			return

@@ -13,6 +13,8 @@ import (
 
 type EmailClient interface {
 	SendConfirmation(booking *Booking) error
+	SendCancellationToAdmin(booking *Booking) error
+	SendFailureAlert(bookingID int64, action string, reason string) error
 }
 
 type emailClient struct {
@@ -87,6 +89,165 @@ func (c *emailClient) SendConfirmation(booking *Booking) error {
 	}
 
 	return nil
+}
+
+func (c *emailClient) SendCancellationToAdmin(booking *Booking) error {
+	adminEmail := os.Getenv("ADMIN_EMAIL")
+	if adminEmail == "" {
+		log.Printf("[email] ADMIN_EMAIL not set — cancellation notification not sent for booking %d", booking.ID)
+		return nil
+	}
+
+	subject := fmt.Sprintf("Cancelación de reserva #%d — %s %s", booking.ID, booking.GuestFirstName, booking.GuestLastName)
+	html := buildCancellationAdminHTML(booking)
+
+	if c.apiKey == "" {
+		log.Printf("[email] (dry-run) Would send cancellation to: %s | Subject: %s", adminEmail, subject)
+		return nil
+	}
+
+	payload := resendRequest{
+		From:    c.fromEmail,
+		To:      []string{adminEmail},
+		Subject: subject,
+		Html:    html,
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("error marshaling email payload: %w", err)
+	}
+
+	req, err := http.NewRequest("POST", "https://api.resend.com/emails", bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("error creating request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("error sending request to Resend: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("Resend API error %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	return nil
+}
+
+func buildCancellationAdminHTML(b *Booking) string {
+	reasonBlock := "No especificado"
+	if b.CancelReason != "" {
+		reasonBlock = b.CancelReason
+	}
+
+	return fmt.Sprintf(`<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f4f7f9;font-family:Arial,sans-serif">
+  <table width="100%%" cellpadding="0" cellspacing="0" style="background:#f4f7f9;padding:40px 0">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.08)">
+
+        <tr>
+          <td style="background:linear-gradient(135deg,#dc2626,#b91c1c);padding:40px;text-align:center">
+            <h1 style="margin:0;color:#ffffff;font-size:26px;font-weight:700">Cancelación de Reserva</h1>
+            <p style="margin:10px 0 0;color:#fca5a5;font-size:15px">Un huésped ha cancelado su reserva</p>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding:30px 40px 0;text-align:center">
+            <div style="display:inline-block;background:#fef2f2;border:2px solid #fca5a5;border-radius:8px;padding:12px 24px">
+              <span style="color:#991b1b;font-size:13px;font-weight:600">Número de Reserva</span>
+              <div style="color:#7f1d1d;font-size:30px;font-weight:800">#%d</div>
+            </div>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding:24px 40px">
+            <table width="100%%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border-radius:10px;border:1px solid #e2e8f0;overflow:hidden">
+              <tr style="background:#e2e8f0">
+                <td colspan="2" style="padding:12px 20px;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:1px">
+                  Datos del huésped
+                </td>
+              </tr>
+              <tr><td style="padding:12px 20px;color:#64748b;font-size:14px;border-bottom:1px solid #e2e8f0">Nombre</td>
+                  <td style="padding:12px 20px;color:#1e293b;font-size:14px;font-weight:600;border-bottom:1px solid #e2e8f0">%s %s</td></tr>
+              <tr style="background:#f1f5f9">
+                  <td style="padding:12px 20px;color:#64748b;font-size:14px;border-bottom:1px solid #e2e8f0">DNI</td>
+                  <td style="padding:12px 20px;color:#1e293b;font-size:14px;font-weight:600;border-bottom:1px solid #e2e8f0">%s</td></tr>
+              <tr><td style="padding:12px 20px;color:#64748b;font-size:14px;border-bottom:1px solid #e2e8f0">Email</td>
+                  <td style="padding:12px 20px;color:#1e293b;font-size:14px;font-weight:600;border-bottom:1px solid #e2e8f0">%s</td></tr>
+              <tr style="background:#f1f5f9">
+                  <td style="padding:12px 20px;color:#64748b;font-size:14px">Teléfono</td>
+                  <td style="padding:12px 20px;color:#1e293b;font-size:14px;font-weight:600">%s</td></tr>
+            </table>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding:0 40px 24px">
+            <table width="100%%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border-radius:10px;border:1px solid #e2e8f0;overflow:hidden">
+              <tr style="background:#e2e8f0">
+                <td colspan="2" style="padding:12px 20px;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:1px">
+                  Detalles de la reserva cancelada
+                </td>
+              </tr>
+              <tr><td style="padding:12px 20px;color:#64748b;font-size:14px;border-bottom:1px solid #e2e8f0">Check-in</td>
+                  <td style="padding:12px 20px;color:#1e293b;font-size:14px;font-weight:600;border-bottom:1px solid #e2e8f0">%s</td></tr>
+              <tr style="background:#f1f5f9">
+                  <td style="padding:12px 20px;color:#64748b;font-size:14px;border-bottom:1px solid #e2e8f0">Check-out</td>
+                  <td style="padding:12px 20px;color:#1e293b;font-size:14px;font-weight:600;border-bottom:1px solid #e2e8f0">%s</td></tr>
+              <tr><td style="padding:12px 20px;color:#64748b;font-size:14px;border-bottom:1px solid #e2e8f0">Huéspedes</td>
+                  <td style="padding:12px 20px;color:#1e293b;font-size:14px;font-weight:600;border-bottom:1px solid #e2e8f0">%d</td></tr>
+              <tr style="background:#fef9c3">
+                  <td style="padding:12px 20px;color:#854d0e;font-size:14px;font-weight:700;border-bottom:1px solid #e2e8f0">Total reserva</td>
+                  <td style="padding:12px 20px;color:#854d0e;font-size:16px;font-weight:800;border-bottom:1px solid #e2e8f0">$%.0f ARS</td></tr>
+              <tr style="background:#fef2f2">
+                  <td style="padding:12px 20px;color:#991b1b;font-size:14px;font-weight:700">Seña a devolver</td>
+                  <td style="padding:12px 20px;color:#991b1b;font-size:16px;font-weight:800">$%.0f ARS</td></tr>
+            </table>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding:0 40px 30px">
+            <div style="background:#fef2f2;border-left:4px solid #dc2626;border-radius:4px;padding:16px 20px">
+              <p style="margin:0 0 8px;color:#991b1b;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px">Motivo de cancelación</p>
+              <p style="margin:0;color:#1e293b;font-size:14px;line-height:1.6">%s</p>
+            </div>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="background:#1e293b;padding:20px 40px;text-align:center">
+            <p style="margin:0;color:#94a3b8;font-size:13px">Recordá contactar al huésped en menos de 48hs para coordinar la devolución de la seña.</p>
+          </td>
+        </tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`,
+		b.ID,
+		b.GuestFirstName, b.GuestLastName,
+		b.GuestDNI,
+		b.GuestEmail,
+		b.GuestPhone,
+		b.CheckIn,
+		b.CheckOut,
+		b.Guests,
+		b.TotalPrice,
+		b.DepositAmount,
+		reasonBlock,
+	)
 }
 
 func buildConfirmationHTML(b *Booking) string {

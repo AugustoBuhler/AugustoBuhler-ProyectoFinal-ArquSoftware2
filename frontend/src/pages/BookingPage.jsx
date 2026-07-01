@@ -4,12 +4,12 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Calendar, User, Mail, Phone, CreditCard, ArrowLeft,
   AlertCircle, Loader2, Home, RefreshCw, ChevronLeft, ChevronRight,
+  CheckCircle2, XCircle,
 } from 'lucide-react'
-import { getApartmentById, createBooking, createCheckout } from '../services/api'
+import { getApartmentById, createBooking, createCheckout, checkTypeAvailability } from '../services/api'
 import { getAvailableApartmentByType, getApartmentTypes } from '../services/apartmentTypes'
 import { format } from 'date-fns'
 
-// Mirrors the backend's GetApartmentType(name) logic
 const getTypeFromName = (name = '') => {
   if (name.startsWith('Quadruple')) return 'quadruple'
   if (name.startsWith('Double Matrimonial')) return 'double_matrimonial'
@@ -25,7 +25,6 @@ const TYPE_LABELS = {
   double_twin: 'Doble Twin',
 }
 
-// ─── Facility images shown in the gallery (fallback when apartment has no images) ─
 const FACILITY_IMAGES = [
   'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=1200&q=80',
   'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=1200&q=80',
@@ -40,7 +39,6 @@ const slideVariants = {
   exit: (dir) => ({ x: dir > 0 ? '-100%' : '100%', opacity: 0 }),
 }
 
-// ─── Image Gallery ─────────────────────────────────────────────────────────────
 const ImageGallery = ({ images }) => {
   const [current, setCurrent] = useState(0)
   const [direction, setDirection] = useState(1)
@@ -55,27 +53,17 @@ const ImageGallery = ({ images }) => {
     return () => clearInterval(timer)
   }, [total])
 
-  const prev = () => {
-    setDirection(-1)
-    setCurrent(prev => (prev - 1 + total) % total)
-  }
-
-  const next = () => {
-    setDirection(1)
-    setCurrent(prev => (prev + 1) % total)
-  }
-
-  const goTo = (idx) => {
-    setDirection(idx > current ? 1 : -1)
-    setCurrent(idx)
-  }
+  const prev = () => { setDirection(-1); setCurrent(prev => (prev - 1 + total) % total) }
+  const next = () => { setDirection(1); setCurrent(prev => (prev + 1) % total) }
+  const goTo = (idx) => { setDirection(idx > current ? 1 : -1); setCurrent(idx) }
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 16 }}
+      initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
-      className="relative rounded-2xl overflow-hidden h-[240px] sm:h-[320px] md:h-[400px] mb-8 group"
+      transition={{ duration: 0.4 }}
+      className="relative overflow-hidden h-[220px] sm:h-[300px] md:h-[380px] mb-8 group"
+      style={{ borderRadius: '4px' }}
     >
       <AnimatePresence initial={false} custom={direction}>
         <motion.img
@@ -92,141 +80,128 @@ const ImageGallery = ({ images }) => {
         />
       </AnimatePresence>
 
-      {/* Bottom gradient */}
-      <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/55 to-transparent pointer-events-none" />
+      <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/40 to-transparent pointer-events-none" />
 
-      {/* Arrows: always visible on mobile, hover-reveal on desktop */}
       {total > 1 && (
         <>
           <button
             onClick={prev}
-            className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/40 hover:bg-black/65 text-white flex items-center justify-center transition-all sm:opacity-0 sm:group-hover:opacity-100"
+            className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-paper/80 hover:bg-paper text-ink flex items-center justify-center transition-all sm:opacity-0 sm:group-hover:opacity-100"
           >
-            <ChevronLeft className="w-5 h-5" />
+            <ChevronLeft className="w-4 h-4" />
           </button>
           <button
             onClick={next}
-            className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/40 hover:bg-black/65 text-white flex items-center justify-center transition-all sm:opacity-0 sm:group-hover:opacity-100"
+            className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-paper/80 hover:bg-paper text-ink flex items-center justify-center transition-all sm:opacity-0 sm:group-hover:opacity-100"
           >
-            <ChevronRight className="w-5 h-5" />
+            <ChevronRight className="w-4 h-4" />
           </button>
         </>
       )}
 
-      {/* Dot indicators */}
       {total > 1 && (
         <div className="absolute bottom-4 inset-x-0 flex justify-center gap-2">
           {images.map((_, i) => (
             <button
               key={i}
               onClick={() => goTo(i)}
-              className={`h-2 rounded-full transition-all ${
-                i === current ? 'bg-white w-6' : 'bg-white/50 hover:bg-white/75 w-2'
-              }`}
+              className={`h-1.5 rounded-full transition-all ${i === current ? 'bg-paper w-6' : 'bg-paper/50 hover:bg-paper/75 w-1.5'}`}
             />
           ))}
         </div>
       )}
 
-      {/* Counter */}
-      <div className="absolute top-4 right-4 bg-black/40 text-white text-xs px-2.5 py-1 rounded-full pointer-events-none">
+      <div className="absolute top-3 right-3 bg-paper/70 text-ink text-xs px-2.5 py-1 rounded-full pointer-events-none">
         {current + 1} / {total}
       </div>
     </motion.div>
   )
 }
 
-// ─── Availability Modal ────────────────────────────────────────────────────────
 const AvailabilityModal = ({ mode, typeName, onAccept, onDecline, onGoHome }) => (
   <motion.div
     initial={{ opacity: 0 }}
     animate={{ opacity: 1 }}
     exit={{ opacity: 0 }}
-    className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+    className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/60 backdrop-blur-sm"
   >
     <motion.div
-      initial={{ opacity: 0, scale: 0.85, y: 24 }}
+      initial={{ opacity: 0, scale: 0.9, y: 20 }}
       animate={{ opacity: 1, scale: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.85, y: 24 }}
+      exit={{ opacity: 0, scale: 0.9, y: 20 }}
       transition={{ type: 'spring', damping: 26, stiffness: 320 }}
-      className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 text-center"
+      className="bg-paper border border-hairline max-w-md w-full p-8 text-center"
+      style={{ borderRadius: '4px' }}
     >
       {mode === 'searching' && (
         <>
           <motion.div
             animate={{ rotate: 360 }}
             transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-            className="w-16 h-16 mx-auto mb-5"
+            className="w-12 h-12 mx-auto mb-5"
           >
             <Loader2 className="w-full h-full text-primary-600" />
           </motion.div>
-          <h3 className="text-xl font-bold text-gray-800 mb-2">Buscando disponibilidad...</h3>
-          <p className="text-gray-500">Estamos buscando otra habitación con las mismas características.</p>
+          <h3 className="font-display text-xl font-bold text-ink mb-2">Buscando disponibilidad...</h3>
+          <p className="text-ink-soft text-sm">Estamos buscando otra habitación con las mismas características.</p>
         </>
       )}
 
       {mode === 'confirm' && (
         <>
-          <div className="w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center mx-auto mb-5">
-            <AlertCircle className="w-9 h-9 text-amber-500" />
+          <div className="w-14 h-14 rounded-full border border-hairline flex items-center justify-center mx-auto mb-5">
+            <AlertCircle className="w-7 h-7 text-primary-600" />
           </div>
-          <h3 className="text-xl font-bold text-gray-800 mb-2">Habitación no disponible</h3>
-          <p className="text-gray-600 mb-2">
+          <h3 className="font-display text-xl font-bold text-ink mb-2">Habitación no disponible</h3>
+          <p className="text-ink-soft text-sm mb-2">
             Esta habitación ya está reservada para las fechas que seleccionaste.
           </p>
-          <p className="text-gray-700 font-medium mb-7">
-            ¿Querés que te asignemos otra habitación{typeName ? ` de tipo <strong>${typeName}</strong>` : ''} con las mismas características?
+          <p className="text-ink font-medium text-sm mb-8">
+            ¿Querés que te asignemos otra habitación{typeName ? ` de tipo ${typeName}` : ''} con las mismas características?
           </p>
           <div className="flex flex-col sm:flex-row gap-3">
-            <motion.button
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
+            <button
               onClick={onAccept}
-              className="flex-1 flex items-center justify-center gap-2 bg-primary-600 hover:bg-primary-700 text-white font-semibold px-5 py-3 rounded-xl transition-colors"
+              className="flex-1 btn-primary text-sm py-3"
             >
-              <RefreshCw className="w-4 h-4" />
+              <RefreshCw className="w-4 h-4 mr-2" />
               Sí, asignar otra
-            </motion.button>
-            <motion.button
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
+            </button>
+            <button
               onClick={onDecline}
-              className="flex-1 px-5 py-3 rounded-xl border border-gray-300 text-gray-700 font-semibold hover:bg-gray-50 transition-colors"
+              className="flex-1 btn-secondary text-sm py-3"
             >
               No, volver
-            </motion.button>
+            </button>
           </div>
         </>
       )}
 
       {mode === 'none_available' && (
         <>
-          <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-5">
-            <AlertCircle className="w-9 h-9 text-red-500" />
+          <div className="w-14 h-14 rounded-full border border-hairline flex items-center justify-center mx-auto mb-5">
+            <AlertCircle className="w-7 h-7 text-red-500" />
           </div>
-          <h3 className="text-xl font-bold text-gray-800 mb-3">Lo sentimos</h3>
-          <p className="text-gray-600 mb-2">
+          <h3 className="font-display text-xl font-bold text-ink mb-3">Lo sentimos</h3>
+          <p className="text-ink-soft text-sm mb-2">
             No quedan habitaciones con esas características disponibles para las fechas seleccionadas.
           </p>
-          <p className="text-gray-500 text-sm mb-8">
+          <p className="text-muted text-xs mb-8">
             Podés explorar otros tipos de habitaciones o elegir fechas distintas.
           </p>
-          <motion.button
-            whileHover={{ scale: 1.03 }}
-            whileTap={{ scale: 0.97 }}
+          <button
             onClick={onGoHome}
-            className="inline-flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-white font-semibold px-7 py-3 rounded-xl transition-colors"
+            className="inline-flex items-center gap-2 btn-primary text-sm py-3 px-6"
           >
             <Home className="w-4 h-4" />
             Ver otras habitaciones
-          </motion.button>
+          </button>
         </>
       )}
     </motion.div>
   </motion.div>
 )
 
-// ─── BookingPage ───────────────────────────────────────────────────────────────
 const BookingPage = () => {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -249,8 +224,7 @@ const BookingPage = () => {
     payment_method: 'transferencia',
   })
   const [errors, setErrors] = useState({})
-
-  // 'hidden' | 'confirm' | 'searching' | 'none_available'
+  const [availability, setAvailability] = useState(null)
   const [modalMode, setModalMode] = useState('hidden')
 
   useEffect(() => {
@@ -278,6 +252,19 @@ const BookingPage = () => {
     loadApartment()
   }, [id, apartmentType])
 
+  useEffect(() => {
+    const type = apartmentType
+    const { check_in, check_out } = formData
+    if (!type || !check_in || !check_out) { setAvailability(null); return }
+    if (check_out <= check_in) { setAvailability(null); return }
+    setAvailability('checking')
+    const timer = setTimeout(async () => {
+      const result = await checkTypeAvailability(type, check_in, check_out)
+      setAvailability(result)
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [formData.check_in, formData.check_out, apartmentType])
+
   const handleChange = (e) => {
     const { name, value } = e.target
     setFormData(prev => ({ ...prev, [name]: value }))
@@ -289,9 +276,8 @@ const BookingPage = () => {
     const newErrors = {}
     if (!formData.check_in) newErrors.check_in = 'Fecha de entrada requerida'
     if (!formData.check_out) newErrors.check_out = 'Fecha de salida requerida'
-    if (formData.check_in && formData.check_out && formData.check_out <= formData.check_in) {
+    if (formData.check_in && formData.check_out && formData.check_out <= formData.check_in)
       newErrors.check_out = 'La fecha de salida debe ser posterior a la de entrada'
-    }
     if (!formData.guests || formData.guests < 1) newErrors.guests = 'Número de huéspedes requerido'
     if (!formData.first_name) newErrors.first_name = 'Nombre requerido'
     if (!formData.last_name) newErrors.last_name = 'Apellido requerido'
@@ -333,22 +319,16 @@ const BookingPage = () => {
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (!validate()) return
-
     setSubmitting(true)
     setSubmitError('')
     try {
       let apartmentID = null
-
       if (apartmentType) {
-        // Flow A: booking by type — find any available apartment of this type
         try {
-          const available = await getAvailableApartmentByType(
-            apartmentType, formData.check_in, formData.check_out
-          )
+          const available = await getAvailableApartmentByType(apartmentType, formData.check_in, formData.check_out)
           apartmentID = available.id
           setApartment(available)
         } catch {
-          // No apartments of this type available
           setModalMode('none_available')
           setSubmitting(false)
           return
@@ -356,13 +336,11 @@ const BookingPage = () => {
       } else {
         apartmentID = parseInt(id)
       }
-
       const booking = await createBooking(buildBookingPayload(apartmentID))
       const checkout = await createCheckout(booking.id)
       navigate(`/reserva/pago/esperando?id=${booking.id}&mp=${encodeURIComponent(checkout.init_point)}${apartmentType ? `&type=${apartmentType}` : ''}`)
     } catch (error) {
       if (isUnavailableError(error)) {
-        // Specific apartment is taken → offer alternative
         setModalMode('confirm')
       } else {
         setSubmitError(error.response?.data?.error || 'Error al crear la reserva. Por favor, intenta nuevamente.')
@@ -374,13 +352,8 @@ const BookingPage = () => {
 
   const handleAcceptAlternative = async () => {
     setModalMode('searching')
-
     const type = apartmentType || getTypeFromName(apartment?.name)
-    if (!type) {
-      setModalMode('none_available')
-      return
-    }
-
+    if (!type) { setModalMode('none_available'); return }
     try {
       const alt = await getAvailableApartmentByType(type, formData.check_in, formData.check_out)
       setApartment(alt)
@@ -394,10 +367,8 @@ const BookingPage = () => {
   }
 
   const handleDeclineAlternative = () => setModalMode('hidden')
-
   const handleGoHome = () => navigate('/')
 
-  // ── Derived values ──
   const calculateNights = () => {
     if (!formData.check_in || !formData.check_out) return 0
     const diff = new Date(formData.check_out) - new Date(formData.check_in)
@@ -410,11 +381,11 @@ const BookingPage = () => {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center min-h-screen">
+      <div className="flex justify-center items-center min-h-screen gap-3 text-muted">
         <motion.div
           animate={{ rotate: 360 }}
           transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-          className="w-16 h-16 border-4 border-primary-600 border-t-transparent rounded-full"
+          className="w-6 h-6 border-2 border-primary-600 border-t-transparent rounded-full"
         />
       </div>
     )
@@ -422,95 +393,128 @@ const BookingPage = () => {
 
   if (!apartment) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+      <div className="max-w-6xl mx-auto px-10 py-8">
+        <div className="border border-red-200 bg-red-50 text-red-700 px-4 py-3 rounded text-sm">
           {apartmentType ? 'Tipo de apartamento no encontrado' : 'Apartamento no encontrado'}
         </div>
       </div>
     )
   }
 
+  const fieldClass = (name) =>
+    `input-field ${errors[name] ? 'border-red-400 focus:border-red-500' : ''}`
+
   return (
     <>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-6xl mx-auto px-10 py-10">
         <motion.button
-          initial={{ opacity: 0, x: -20 }}
+          initial={{ opacity: 0, x: -16 }}
           animate={{ opacity: 1, x: 0 }}
           onClick={() => navigate(-1)}
-          className="flex items-center text-gray-600 hover:text-primary-600 mb-6 transition-colors"
+          className="flex items-center text-ink-soft hover:text-primary-600 mb-8 transition-colors duration-150 text-sm font-medium"
         >
-          <ArrowLeft className="w-5 h-5 mr-2" />
+          <ArrowLeft className="w-4 h-4 mr-2" />
           Volver
         </motion.button>
 
-        <ImageGallery
-          images={apartment?.images?.length > 0 ? apartment.images : FACILITY_IMAGES}
-        />
+        <ImageGallery images={apartment?.images?.length > 0 ? apartment.images : FACILITY_IMAGES} />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* ── Form ── */}
+          {/* Form */}
           <div className="lg:col-span-2">
             <motion.div
-              initial={{ opacity: 0, y: 20 }}
+              initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
-              className="bg-white rounded-2xl shadow-xl p-8"
+              className="border border-hairline bg-paper p-8"
+              style={{ borderRadius: '4px' }}
             >
-              <h2 className="text-3xl font-bold text-gray-800 mb-6">Completa tu Reserva</h2>
+              <h2 className="font-display text-[28px] font-bold text-ink mb-6">Completá tu Reserva</h2>
 
               {submitError && (
                 <motion.div
-                  initial={{ opacity: 0, y: -8 }}
+                  initial={{ opacity: 0, y: -6 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="flex items-start gap-3 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl mb-6"
+                  className="flex items-start gap-3 border border-red-200 bg-red-50 text-red-700 px-4 py-3 rounded mb-6 text-sm"
                 >
-                  <AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0" />
-                  <p className="text-sm">{submitError}</p>
+                  <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                  <p>{submitError}</p>
                 </motion.div>
               )}
 
               <form onSubmit={handleSubmit} className="space-y-6">
                 {/* Dates */}
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  <label className="block text-[13px] font-semibold text-ink tracking-[0.08em] uppercase mb-3">
                     Fechas de Estancia
                   </label>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs text-gray-600 mb-1">Check-in</label>
+                      <label className="block text-xs text-muted mb-1">Check-in</label>
                       <div className="relative">
-                        <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                        <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-muted w-4 h-4 pointer-events-none" />
                         <input
                           type="date"
                           name="check_in"
                           value={formData.check_in}
                           onChange={handleChange}
                           min={format(new Date(), 'yyyy-MM-dd')}
-                          className={`input-field pl-10 ${errors.check_in ? 'border-red-500' : ''}`}
+                          className={`${fieldClass('check_in')} pl-10`}
                         />
                       </div>
                       {errors.check_in && <p className="text-red-500 text-xs mt-1">{errors.check_in}</p>}
                     </div>
                     <div>
-                      <label className="block text-xs text-gray-600 mb-1">Check-out</label>
+                      <label className="block text-xs text-muted mb-1">Check-out</label>
                       <div className="relative">
-                        <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                        <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-muted w-4 h-4 pointer-events-none" />
                         <input
                           type="date"
                           name="check_out"
                           value={formData.check_out}
                           onChange={handleChange}
                           min={formData.check_in || format(new Date(), 'yyyy-MM-dd')}
-                          className={`input-field pl-10 ${errors.check_out ? 'border-red-500' : ''}`}
+                          className={`${fieldClass('check_out')} pl-10`}
                         />
                       </div>
                       {errors.check_out && <p className="text-red-500 text-xs mt-1">{errors.check_out}</p>}
                     </div>
                   </div>
+
+                  <AnimatePresence>
+                    {availability !== null && apartmentType && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="overflow-hidden mt-2"
+                      >
+                        {availability === 'checking' && (
+                          <div className="flex items-center gap-2 text-xs text-muted">
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            Verificando disponibilidad…
+                          </div>
+                        )}
+                        {availability === true && (
+                          <div className="flex items-center gap-2 text-xs text-emerald-600 font-medium">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            ¡Hay disponibilidad para esas fechas!
+                          </div>
+                        )}
+                        {availability === false && (
+                          <div className="flex items-center gap-2 text-xs text-red-500 font-medium">
+                            <XCircle className="w-3.5 h-3.5" />
+                            No hay disponibilidad para esas fechas. Probá con otras fechas.
+                          </div>
+                        )}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
 
                 {/* Guests */}
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  <label className="block text-[13px] font-semibold text-ink tracking-[0.08em] uppercase mb-2">
                     Número de Huéspedes
                   </label>
                   <input
@@ -520,83 +524,83 @@ const BookingPage = () => {
                     onChange={handleChange}
                     min="1"
                     max={apartment?.max_guests || 10}
-                    className={`input-field ${errors.guests ? 'border-red-500' : ''}`}
+                    className={fieldClass('guests')}
                   />
                   {errors.guests && <p className="text-red-500 text-xs mt-1">{errors.guests}</p>}
                   {apartment?.max_guests && (
-                    <p className="text-xs text-gray-500 mt-1">Máximo {apartment.max_guests} huéspedes</p>
+                    <p className="text-xs text-muted mt-1">Máximo {apartment.max_guests} huéspedes</p>
                   )}
                 </div>
 
                 {/* Guest info */}
-                <div className="border-t pt-6">
-                  <h3 className="text-xl font-bold text-gray-800 mb-4">Datos del Huésped</h3>
+                <div className="border-t border-hairline pt-6">
+                  <h3 className="font-display text-[18px] font-bold text-ink mb-5">Datos del Huésped</h3>
 
                   <div className="grid grid-cols-2 gap-4 mb-4">
                     <div>
-                      <label className="block text-xs text-gray-600 mb-1">Nombre</label>
+                      <label className="block text-xs text-muted mb-1">Nombre</label>
                       <div className="relative">
-                        <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                        <User className="absolute left-4 top-1/2 -translate-y-1/2 text-muted w-4 h-4 pointer-events-none" />
                         <input
                           type="text"
                           name="first_name"
                           value={formData.first_name}
                           onChange={handleChange}
-                          className={`input-field pl-10 ${errors.first_name ? 'border-red-500' : ''}`}
+                          className={`${fieldClass('first_name')} pl-10`}
                         />
                       </div>
                       {errors.first_name && <p className="text-red-500 text-xs mt-1">{errors.first_name}</p>}
                     </div>
                     <div>
-                      <label className="block text-xs text-gray-600 mb-1">Apellido</label>
+                      <label className="block text-xs text-muted mb-1">Apellido</label>
                       <input
                         type="text"
                         name="last_name"
                         value={formData.last_name}
                         onChange={handleChange}
-                        className={`input-field ${errors.last_name ? 'border-red-500' : ''}`}
+                        className={fieldClass('last_name')}
                       />
                       {errors.last_name && <p className="text-red-500 text-xs mt-1">{errors.last_name}</p>}
                     </div>
                   </div>
 
                   <div className="mb-4">
-                    <label className="block text-xs text-gray-600 mb-1">DNI</label>
+                    <label className="block text-xs text-muted mb-1">DNI</label>
                     <input
                       type="text"
                       name="dni"
                       value={formData.dni}
                       onChange={handleChange}
-                      className={`input-field ${errors.dni ? 'border-red-500' : ''}`}
+                      className={fieldClass('dni')}
                     />
                     {errors.dni && <p className="text-red-500 text-xs mt-1">{errors.dni}</p>}
                   </div>
 
                   <div className="grid grid-cols-2 gap-4 mb-4">
                     <div>
-                      <label className="block text-xs text-gray-600 mb-1">Teléfono</label>
+                      <label className="block text-xs text-muted mb-1">Teléfono</label>
                       <div className="relative">
-                        <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                        <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-muted w-4 h-4 pointer-events-none" />
                         <input
                           type="tel"
                           name="phone"
                           value={formData.phone}
                           onChange={handleChange}
-                          className={`input-field pl-10 ${errors.phone ? 'border-red-500' : ''}`}
+                          className={`${fieldClass('phone')} pl-10`}
                         />
                       </div>
                       {errors.phone && <p className="text-red-500 text-xs mt-1">{errors.phone}</p>}
                     </div>
                     <div>
-                      <label className="block text-xs text-gray-600 mb-1">Email</label>
+                      <label className="block text-xs text-muted mb-1">Email</label>
                       <div className="relative">
-                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                        <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-muted w-4 h-4 pointer-events-none" />
                         <input
                           type="email"
                           name="email"
                           value={formData.email}
                           onChange={handleChange}
-                          className={`input-field pl-10 ${errors.email ? 'border-red-500' : ''}`}
+                          className={`${fieldClass('email')} pl-10`}
                         />
                       </div>
                       {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email}</p>}
@@ -604,14 +608,14 @@ const BookingPage = () => {
                   </div>
 
                   <div>
-                    <label className="block text-xs text-gray-600 mb-1">Método de Pago</label>
+                    <label className="block text-xs text-muted mb-1">Método de Pago</label>
                     <div className="relative">
-                      <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                      <CreditCard className="absolute left-4 top-1/2 -translate-y-1/2 text-muted w-4 h-4 pointer-events-none" />
                       <select
                         name="payment_method"
                         value={formData.payment_method}
                         onChange={handleChange}
-                        className={`input-field pl-10 ${errors.payment_method ? 'border-red-500' : ''}`}
+                        className={`${fieldClass('payment_method')} pl-10 appearance-none`}
                       >
                         <option value="transferencia">Transferencia Bancaria</option>
                         <option value="efectivo">Efectivo</option>
@@ -623,14 +627,14 @@ const BookingPage = () => {
 
                 <motion.button
                   type="submit"
-                  whileHover={{ scale: 1.02 }}
+                  whileHover={{ y: -1 }}
                   whileTap={{ scale: 0.98 }}
                   disabled={submitting}
-                  className="btn-primary w-full text-lg py-4 disabled:opacity-60"
+                  className="btn-primary w-full text-base py-4 disabled:opacity-60"
                 >
                   {submitting ? (
                     <span className="flex items-center justify-center gap-2">
-                      <Loader2 className="w-5 h-5 animate-spin" />
+                      <Loader2 className="w-4 h-4 animate-spin" />
                       Procesando...
                     </span>
                   ) : 'Confirmar Reserva'}
@@ -639,71 +643,66 @@ const BookingPage = () => {
             </motion.div>
           </div>
 
-          {/* ── Summary sidebar ── */}
+          {/* Sidebar */}
           <div className="lg:col-span-1">
             <motion.div
-              initial={{ opacity: 0, x: 20 }}
+              initial={{ opacity: 0, x: 16 }}
               animate={{ opacity: 1, x: 0 }}
-              className="bg-white rounded-2xl shadow-xl p-6 sticky top-24"
+              className="border border-hairline bg-paper p-6 sticky top-24"
+              style={{ borderRadius: '4px' }}
             >
-              <h3 className="text-2xl font-bold text-gray-800 mb-4">Resumen</h3>
+              <h3 className="font-display text-[20px] font-bold text-ink mb-5">Resumen</h3>
 
               <div className="mb-4">
-                <h4 className="font-semibold text-gray-800">
+                <h4 className="font-semibold text-ink text-sm">
                   {apartmentType ? `Tipo: ${TYPE_LABELS[apartmentType] || apartmentType}` : apartment.name}
                 </h4>
-                {apartment.city && <p className="text-sm text-gray-600">{apartment.city}</p>}
+                {apartment.city && <p className="text-sm text-ink-soft mt-0.5">{apartment.city}</p>}
                 {apartmentType && (
-                  <p className="text-sm text-gray-500 mt-1">
-                    Se asignará un apartamento disponible al confirmar
-                  </p>
+                  <p className="text-xs text-muted mt-1">Se asignará un apartamento disponible al confirmar</p>
                 )}
               </div>
 
-              <div className="border-t border-b py-4 space-y-2">
+              <div className="border-t border-b border-hairline py-4 space-y-2">
                 {apartment.price_per_night > 0 ? (
                   <>
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Precio por noche</span>
-                      <span className="font-semibold text-gray-900">
-                        ${apartment.price_per_night.toLocaleString('es-AR')}
+                      <span className="text-ink-soft">Precio por noche</span>
+                      <span className="font-semibold text-ink">
+                        ${apartment.price_per_night?.toLocaleString('es-AR')}
                       </span>
                     </div>
 
                     {nights > 0 ? (
                       <>
                         <div className="flex justify-between text-sm">
-                          <span className="text-gray-600">Noches</span>
-                          <span className="font-semibold">{nights}</span>
+                          <span className="text-ink-soft">Noches</span>
+                          <span className="font-semibold text-ink">{nights}</span>
                         </div>
-                        <div className="flex justify-between text-lg font-bold pt-2 border-t">
-                          <span>Total</span>
-                          <span className="text-primary-600">
+                        <div className="flex justify-between pt-2 border-t border-hairline">
+                          <span className="font-display font-bold text-ink">Total</span>
+                          <span className="font-display font-bold text-ink text-lg">
                             ${totalPrice.toLocaleString('es-AR')}
                           </span>
                         </div>
                         <motion.div
-                          initial={{ opacity: 0, y: 6 }}
+                          initial={{ opacity: 0, y: 4 }}
                           animate={{ opacity: 1, y: 0 }}
-                          className="mt-1 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3"
+                          className="mt-2 border border-primary-200 bg-primary-50 px-4 py-3 rounded"
                         >
-                          <p className="text-xs text-amber-700 font-medium mb-1">Seña anticipada (30%)</p>
-                          <p className="text-xl font-bold text-amber-600">
+                          <p className="text-xs text-primary-700 font-semibold mb-1">Seña anticipada (30%)</p>
+                          <p className="font-display text-[22px] font-bold text-primary-600 leading-none">
                             ${(totalPrice * 0.30).toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                           </p>
-                          <p className="text-xs text-amber-600 mt-1">
-                            Monto a abonar al confirmar la reserva
-                          </p>
+                          <p className="text-xs text-primary-600 mt-1">Monto a abonar al confirmar</p>
                         </motion.div>
                       </>
                     ) : (
-                      <p className="text-sm text-gray-400 pt-1">
-                        Seleccioná las fechas para ver el total
-                      </p>
+                      <p className="text-sm text-muted pt-1">Seleccioná las fechas para ver el total</p>
                     )}
                   </>
                 ) : (
-                  <p className="text-sm text-gray-500">Cargando precio...</p>
+                  <p className="text-sm text-muted">Cargando precio...</p>
                 )}
               </div>
             </motion.div>
@@ -711,7 +710,6 @@ const BookingPage = () => {
         </div>
       </div>
 
-      {/* ── Availability Modal ── */}
       <AnimatePresence>
         {modalMode !== 'hidden' && (
           <AvailabilityModal

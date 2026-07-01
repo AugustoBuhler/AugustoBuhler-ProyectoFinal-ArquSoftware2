@@ -94,9 +94,10 @@ func main() {
 	statsRepo := repositories.NewStatsRepository(collection)
 	usersClient := repositories.NewUsersClient()
 	apartmentsClient := repositories.NewApartmentsClient()
+	webhookSecret := os.Getenv("MP_WEBHOOK_SECRET")
 	bookingService := services.NewBookingService(bookingRepo, usersClient, apartmentsClient, rmqClient, financeRepo, mpClient)
 	configService := services.NewConfigService(financeRepo)
-	bookingController := controllers.NewBookingController(bookingService)
+	bookingController := controllers.NewBookingController(bookingService, webhookSecret)
 	configController := controllers.NewConfigController(configService, financeRepo, statsRepo)
 
 	// Scheduler diario: marca reservas vencidas como "concluida" cada medianoche UTC
@@ -127,9 +128,13 @@ func main() {
 		// ── Rutas PÚBLICAS (sin autenticación) ──────────────────────────────
 		api.POST("/bookings", bookingController.CreateBooking)           // reserva pública
 		api.GET("/bookings/:id", bookingController.GetBookingByID)       // consulta estado reserva
+		api.GET("/bookings/by-contact", bookingController.GetBookingByContact)
+		api.POST("/bookings/availability-batch", bookingController.CheckAvailabilityBatch)
+		api.POST("/bookings/:id/cancel-guest", bookingController.CancelBookingByGuest)
 		api.POST("/bookings/:id/checkout", bookingController.CreateCheckout)
 		api.POST("/bookings/:id/verify-payment", bookingController.VerifyPayment)
 		api.POST("/payments/webhook", bookingController.HandlePaymentWebhook)
+		api.POST("/payments/confirm", bookingController.ConfirmPaymentFromBrowser)
 
 		frontendBase := strings.TrimRight(os.Getenv("FRONTEND_BASE_URL"), "/")
 		if frontendBase == "" {

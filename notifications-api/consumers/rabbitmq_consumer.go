@@ -1,15 +1,59 @@
 package consumers
 
 import (
+	"crypto/md5"
 	"encoding/json"
 	"fmt"
 	"log"
 	"os"
+	"strings"
+	"sync"
+	"time"
 
 	"notifications-api/clients"
 
 	"github.com/streadway/amqp"
 )
+
+const maxRetries = 3
+
+// retryTracker lleva la cuenta de intentos por mensaje (clave = hash del body)
+// El hash es estable entre reencolas aunque el delivery tag cambie.
+var retryTracker sync.Map
+
+func retryKey(body []byte) string {
+	h := md5.Sum(body)
+	return fmt.Sprintf("%x", h)
+}
+
+func getRetryCount(body []byte) int {
+	key := retryKey(body)
+	if v, ok := retryTracker.Load(key); ok {
+		return v.(int)
+	}
+	return 0
+}
+
+func incrementRetry(body []byte) int {
+	key := retryKey(body)
+	count := getRetryCount(body) + 1
+	retryTracker.Store(key, count)
+	return count
+}
+
+func clearRetry(body []byte) {
+	retryTracker.Delete(retryKey(body))
+}
+
+// isPermanentError detecta errores 4xx de Resend que no tienen sentido reintentar.
+// Ejemplos: email inválido (422), restricción de dominio en free tier (403).
+func isPermanentError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "Resend API error 4")
+}
 
 type BookingConsumer interface {
 	Start() error
@@ -129,27 +173,65 @@ func (c *bookingConsumer) handleMessage(msg amqp.Delivery) {
 
 	log.Printf("[notifications] received event: action=%s, booking_id=%d", action, bookingID)
 
-	// "created" → reserva admin (email inmediato)
-	// "payment_confirmed" → reserva pública, seña pagada vía MP (email post-pago)
-	if action != "created" && action != "payment_confirmed" {
+	// Obtener booking (con retry si bookings-api falla temporalmente)
+	booking, err := c.bookingsClient.GetBookingByID(bookingID)
+	if err != nil {
+		retries := incrementRetry(msg.Body)
+		if retries <= maxRetries {
+			log.Printf("[notifications] error fetching booking %d (intento %d/%d): %v — reencolar", bookingID, retries, maxRetries, err)
+			time.Sleep(time.Duration(retries*5) * time.Second) // backoff: 5s, 10s, 15s
+			msg.Nack(false, true)
+		} else {
+			log.Printf("[notifications] booking %d: se agotaron los %d reintentos al fetchear — descartando", bookingID, maxRetries)
+			clearRetry(msg.Body)
+			msg.Ack(false)
+		}
+		return
+	}
+
+	// Enviar email según el tipo de evento
+	var sendErr error
+	switch action {
+	case "created", "payment_confirmed":
+		sendErr = c.emailClient.SendConfirmation(booking)
+		if sendErr == nil {
+			log.Printf("[notifications] email enviado para booking %d a %s (action=%s)", bookingID, booking.GuestEmail, action)
+		}
+	case "guest_cancelled":
+		sendErr = c.emailClient.SendCancellationToAdmin(booking)
+		if sendErr == nil {
+			log.Printf("[notifications] email de cancelación enviado al admin para booking %d", bookingID)
+		}
+	default:
 		msg.Ack(false)
 		return
 	}
 
-	booking, err := c.bookingsClient.GetBookingByID(bookingID)
-	if err != nil {
-		log.Printf("[notifications] error fetching booking %d: %v — retrying", bookingID, err)
-		msg.Nack(false, true)
+	if sendErr != nil {
+		if isPermanentError(sendErr) {
+			// Error 4xx de Resend: no tiene sentido reintentar (email inválido, restricción de plan, etc.)
+			log.Printf("[notifications] error permanente en booking %d: %v — descartando sin reintentar", bookingID, sendErr)
+			clearRetry(msg.Body)
+			msg.Ack(false)
+			return
+		}
+
+		// Error transitorio (red, Resend caído): reintentar con backoff
+		retries := incrementRetry(msg.Body)
+		if retries <= maxRetries {
+			log.Printf("[notifications] error enviando email para booking %d (intento %d/%d): %v — reencolar en %ds",
+				bookingID, retries, maxRetries, sendErr, retries*10)
+			time.Sleep(time.Duration(retries*10) * time.Second) // backoff: 10s, 20s, 30s
+			msg.Nack(false, true)
+		} else {
+			log.Printf("[notifications] booking %d: se agotaron los %d reintentos de email — descartando", bookingID, maxRetries)
+			clearRetry(msg.Body)
+			msg.Ack(false)
+		}
 		return
 	}
 
-	if err := c.emailClient.SendConfirmation(booking); err != nil {
-		log.Printf("[notifications] error sending email for booking %d: %v", bookingID, err)
-		// No reintentamos el email para evitar duplicados — solo logueamos
-	} else {
-		log.Printf("[notifications] confirmation email sent for booking %d to %s (action=%s)", bookingID, booking.GuestEmail, action)
-	}
-
+	clearRetry(msg.Body)
 	msg.Ack(false)
 }
 

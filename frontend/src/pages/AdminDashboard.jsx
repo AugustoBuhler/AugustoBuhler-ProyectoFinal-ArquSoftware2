@@ -583,45 +583,46 @@ const AdminDashboard = () => {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-paper">
       {/* Sidebar */}
-      <div className="fixed left-0 top-0 h-full w-64 bg-white shadow-lg z-10">
-        <div className="p-6 border-b">
-          <h1 className="text-2xl font-bold text-gray-800">Admin Panel</h1>
+      <div className="fixed left-0 top-0 h-full w-64 bg-paper border-r border-hairline z-10">
+        <div className="p-6 border-b border-hairline flex items-center gap-2.5">
+          <span className="w-[8px] h-[8px] rounded-full bg-primary-600 flex-shrink-0" />
+          <h1 className="font-display text-[16px] font-bold text-ink tracking-[0.04em] uppercase">Admin Panel</h1>
         </div>
-        <nav className="p-4 space-y-2">
+        <nav className="p-4 space-y-1">
           <button
             onClick={() => setActiveTab('apartments')}
-            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${
-              activeTab === 'apartments' ? 'bg-primary-100 text-primary-700' : 'text-gray-700 hover:bg-gray-100'
+            className={`w-full flex items-center space-x-3 px-4 py-3 rounded transition-colors duration-150 text-sm font-medium ${
+              activeTab === 'apartments' ? 'bg-primary-50 text-primary-700 border border-primary-200' : 'text-ink-soft hover:bg-[#efece6] border border-transparent'
             }`}
           >
-            <Home className="w-5 h-5" />
+            <Home className="w-4 h-4" />
             <span>Apartamentos</span>
           </button>
           <button
             onClick={() => setActiveTab('bookings')}
-            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${
-              activeTab === 'bookings' ? 'bg-primary-100 text-primary-700' : 'text-gray-700 hover:bg-gray-100'
+            className={`w-full flex items-center space-x-3 px-4 py-3 rounded transition-colors duration-150 text-sm font-medium ${
+              activeTab === 'bookings' ? 'bg-primary-50 text-primary-700 border border-primary-200' : 'text-ink-soft hover:bg-[#efece6] border border-transparent'
             }`}
           >
-            <Calendar className="w-5 h-5" />
+            <Calendar className="w-4 h-4" />
             <span>Reservas</span>
           </button>
           <button
             onClick={() => setActiveTab('finance')}
-            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${
-              activeTab === 'finance' ? 'bg-primary-100 text-primary-700' : 'text-gray-700 hover:bg-gray-100'
+            className={`w-full flex items-center space-x-3 px-4 py-3 rounded transition-colors duration-150 text-sm font-medium ${
+              activeTab === 'finance' ? 'bg-primary-50 text-primary-700 border border-primary-200' : 'text-ink-soft hover:bg-[#efece6] border border-transparent'
             }`}
           >
-            <TrendingUp className="w-5 h-5" />
+            <TrendingUp className="w-4 h-4" />
             <span>Finanzas</span>
           </button>
           <button
             onClick={handleLogout}
-            className="w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-red-600 hover:bg-red-50 transition-colors"
+            className="w-full flex items-center space-x-3 px-4 py-3 rounded text-red-600 hover:bg-red-50 transition-colors duration-150 border border-transparent text-sm font-medium"
           >
-            <LogOut className="w-5 h-5" />
+            <LogOut className="w-4 h-4" />
             <span>Cerrar Sesión</span>
           </button>
         </nav>
@@ -633,7 +634,7 @@ const AdminDashboard = () => {
 
           {/* Header */}
           <div className="mb-6 flex items-center justify-between">
-            <h2 className="text-3xl font-bold text-gray-800">
+            <h2 className="font-display text-[26px] font-bold text-ink tracking-tight">
               {activeTab === 'apartments' ? 'Gestión de Apartamentos'
                 : activeTab === 'bookings' ? 'Gestión de Reservas'
                 : 'Finanzas'}
@@ -697,9 +698,9 @@ const AdminDashboard = () => {
                     animate={{ opacity: 1, y: 0 }}
                     className="space-y-4"
                   >
-                    <div className="border-b-2 border-primary-600 pb-2">
-                      <h3 className="text-2xl font-bold text-gray-800">{getTypeDisplayName(type)}</h3>
-                      <p className="text-sm text-gray-600 mt-1">
+                    <div className="border-b border-hairline pb-3">
+                      <h3 className="font-display text-xl font-bold text-ink">{getTypeDisplayName(type)}</h3>
+                      <p className="text-sm text-muted mt-1">
                         {groupedApartments[type].length} {groupedApartments[type].length === 1 ? 'apartamento' : 'apartamentos'}
                       </p>
                     </div>
@@ -709,7 +710,8 @@ const AdminDashboard = () => {
                           key={apt.id}
                           initial={{ opacity: 0, scale: 0.9 }}
                           animate={{ opacity: 1, scale: 1 }}
-                          className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow"
+                          className="bg-paper border border-hairline p-6 hover:border-ink transition-colors duration-150"
+                          style={{ borderRadius: '4px' }}
                         >
                           <h3 className="text-xl font-bold text-gray-800 mb-1">{apt.name}</h3>
                           <p className="text-gray-500 text-sm mb-3">{apt.city}</p>
@@ -747,9 +749,9 @@ const AdminDashboard = () => {
           ) : activeTab === 'bookings' ? (
 
             /* ── Reservas ── */
-            <div className="bg-white rounded-lg shadow-md overflow-hidden">
+            <div className="border border-hairline bg-paper overflow-hidden" style={{ borderRadius: '4px' }}>
               <table className="w-full">
-                <thead className="bg-gray-50">
+                <thead className="bg-[#efece6]">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Huésped</th>
@@ -760,16 +762,16 @@ const AdminDashboard = () => {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Acciones</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200">
+                <tbody className="divide-y divide-hairline">
                   {filteredBookings.length === 0 ? (
                     <tr>
-                      <td colSpan="7" className="px-6 py-8 text-center text-gray-500">
+                      <td colSpan="7" className="px-6 py-8 text-center text-muted">
                         No hay reservas disponibles
                       </td>
                     </tr>
                   ) : (
                     filteredBookings.map((booking) => (
-                      <tr key={booking.id} className="hover:bg-gray-50">
+                      <tr key={booking.id} className="hover:bg-[#efece6] transition-colors duration-100">
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">#{booking.id}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
                           {booking.user_info?.first_name || 'N/A'} {booking.user_info?.last_name || ''}
@@ -841,8 +843,8 @@ const AdminDashboard = () => {
             <div className="space-y-6">
 
               {/* Tipo de cambio */}
-              <div className="bg-white rounded-2xl shadow-md p-6">
-                <h3 className="text-lg font-bold text-gray-800 mb-1 flex items-center gap-2">
+              <div className="border border-hairline bg-paper p-6" style={{ borderRadius: '4px' }}>
+                <h3 className="text-lg font-bold text-ink mb-1 flex items-center gap-2">
                   <DollarSign className="w-5 h-5 text-primary-600" />
                   Tipo de cambio USD
                 </h3>
@@ -891,9 +893,9 @@ const AdminDashboard = () => {
               </div>
 
               {/* Cotizaciones de mercado en tiempo real */}
-              <div className="bg-white rounded-2xl shadow-md p-6">
+              <div className="border border-hairline bg-paper p-6" style={{ borderRadius: '4px' }}>
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                  <h3 className="text-lg font-bold text-ink flex items-center gap-2">
                     <TrendingUp className="w-5 h-5 text-emerald-600" />
                     Cotizaciones en tiempo real
                   </h3>
@@ -918,7 +920,7 @@ const AdminDashboard = () => {
                 ) : (
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                     {marketRates.map((r) => (
-                      <div key={r.casa} className="border border-gray-100 rounded-xl p-3 hover:border-primary-200 transition-colors">
+                      <div key={r.casa} className="border border-hairline p-3 hover:border-primary-400 transition-colors duration-150" style={{ borderRadius: '4px' }}>
                         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">{r.nombre}</p>
                         <div className="space-y-0.5 mb-3">
                           {r.compra > 0 && (
@@ -939,7 +941,7 @@ const AdminDashboard = () => {
               </div>
 
               {/* Sub-tab selector */}
-              <div className="flex gap-2 border-b border-gray-200 pb-0">
+              <div className="flex gap-2 border-b border-hairline pb-0">
                 {[
                   ['stats', 'Estadísticas'],
                   ['history', `Historial tasas (${rateHistory.length})`],
@@ -948,10 +950,10 @@ const AdminDashboard = () => {
                   <button
                     key={val}
                     onClick={() => setFinanceSubTab(val)}
-                    className={`px-5 py-2.5 text-sm font-medium rounded-t-lg transition-colors border-b-2 -mb-px ${
+                    className={`px-5 py-2.5 text-sm font-medium transition-colors duration-150 border-b-2 -mb-px ${
                       financeSubTab === val
                         ? 'border-primary-600 text-primary-700 bg-primary-50'
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                        : 'border-transparent text-muted hover:text-ink hover:bg-[#efece6]'
                     }`}
                   >
                     {label}
@@ -974,10 +976,10 @@ const AdminDashboard = () => {
                           key={val}
                           onClick={() => handleLoadFinanceStats(val)}
                           disabled={financeLoading}
-                          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                          className={`px-4 py-2 rounded-full text-sm font-medium transition-colors duration-150 ${
                             financePeriod === val
-                              ? 'bg-primary-600 text-white'
-                              : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
+                              ? 'bg-ink text-paper border border-ink'
+                              : 'bg-paper text-ink-soft border border-hairline hover:border-ink hover:text-ink'
                           }`}
                         >
                           {label}
@@ -999,7 +1001,7 @@ const AdminDashboard = () => {
                           { label: 'Promedio por reserva USD', value: `U$D ${financeStats.summary?.avg_booking_usd?.toLocaleString('en-US', { maximumFractionDigits: 2 }) || '0'}`, sub: `ARS ${financeStats.summary?.avg_booking_ars?.toLocaleString('es-AR') || '0'}`, color: 'text-blue-600' },
                           { label: 'Tipo de cambio activo', value: dollarRate > 0 ? `$${dollarRate.toLocaleString('es-AR')}` : 'No configurado', sub: 'ARS por USD', color: 'text-amber-600' },
                         ].map(({ label, value, sub, color }) => (
-                          <div key={label} className="bg-white rounded-xl shadow-md p-5">
+                          <div key={label} className="border border-hairline bg-paper p-5" style={{ borderRadius: '4px' }}>
                             <p className="text-xs text-gray-500 mb-1">{label}</p>
                             <p className={`text-2xl font-bold ${color}`}>{value}</p>
                             <p className="text-xs text-gray-400 mt-1">{sub}</p>
@@ -1008,9 +1010,9 @@ const AdminDashboard = () => {
                       </div>
 
                       {financeStats.breakdown?.length > 0 ? (
-                        <div className="bg-white rounded-2xl shadow-md overflow-hidden">
+                        <div className="border border-hairline bg-paper overflow-hidden" style={{ borderRadius: '4px' }}>
                           <table className="w-full">
-                            <thead className="bg-gray-50">
+                            <thead className="bg-[#efece6]">
                               <tr>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Período</th>
                                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Reservas</th>
@@ -1018,9 +1020,9 @@ const AdminDashboard = () => {
                                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Ingresos USD</th>
                               </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-100">
+                            <tbody className="divide-y divide-hairline">
                               {financeStats.breakdown.map((item) => (
-                                <tr key={item.label} className="hover:bg-gray-50">
+                                <tr key={item.label} className="hover:bg-[#efece6] transition-colors duration-100">
                                   <td className="px-6 py-3 text-sm font-medium text-gray-800">{item.label}</td>
                                   <td className="px-6 py-3 text-sm text-gray-600 text-right">{item.bookings_count}</td>
                                   <td className="px-6 py-3 text-sm text-gray-700 text-right font-medium">
@@ -1035,14 +1037,14 @@ const AdminDashboard = () => {
                           </table>
                         </div>
                       ) : (
-                        <div className="bg-white rounded-2xl shadow-md p-12 text-center text-gray-400">
+                        <div className="border border-hairline bg-paper p-12 text-center text-muted" style={{ borderRadius: '4px' }}>
                           <TrendingUp className="w-12 h-12 mx-auto mb-3 opacity-30" />
                           <p>No hay reservas pagadas en el período seleccionado.</p>
                         </div>
                       )}
                     </>
                   ) : (
-                    <div className="bg-white rounded-2xl shadow-md p-12 text-center text-gray-400">
+                    <div className="border border-hairline bg-paper p-12 text-center text-muted" style={{ borderRadius: '4px' }}>
                       <TrendingUp className="w-12 h-12 mx-auto mb-3 opacity-30" />
                       <p>No se pudieron cargar las estadísticas.</p>
                     </div>
@@ -1051,8 +1053,8 @@ const AdminDashboard = () => {
               )}
 
               {financeSubTab === 'history' && (
-                <div className="bg-white rounded-2xl shadow-md overflow-hidden">
-                  <div className="px-6 py-4 border-b border-gray-100">
+                <div className="border border-hairline bg-paper overflow-hidden" style={{ borderRadius: '4px' }}>
+                  <div className="px-6 py-4 border-b border-hairline">
                     <h3 className="text-base font-bold text-gray-800 flex items-center gap-2">
                       <DollarSign className="w-4 h-4 text-amber-500" />
                       Historial de tipos de cambio
@@ -1066,16 +1068,16 @@ const AdminDashboard = () => {
                     </div>
                   ) : (
                     <table className="w-full">
-                      <thead className="bg-gray-50">
+                      <thead className="bg-[#efece6]">
                         <tr>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">#</th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tasa (ARS/USD)</th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fecha de registro</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-gray-100">
+                      <tbody className="divide-y divide-hairline">
                         {rateHistory.map((rec, idx) => (
-                          <tr key={rec.id} className={`hover:bg-gray-50 ${idx === 0 ? 'bg-amber-50' : ''}`}>
+                          <tr key={rec.id} className={`hover:bg-[#efece6] transition-colors duration-100 ${idx === 0 ? 'bg-amber-50' : ''}`}>
                             <td className="px-6 py-3 text-xs text-gray-400">
                               {idx === 0 && <span className="text-amber-600 font-semibold text-xs mr-1">ACTIVO</span>}
                               #{rec.id}
@@ -1095,8 +1097,8 @@ const AdminDashboard = () => {
               )}
 
               {financeSubTab === 'payments' && (
-                <div className="bg-white rounded-2xl shadow-md overflow-hidden">
-                  <div className="px-6 py-4 border-b border-gray-100">
+                <div className="border border-hairline bg-paper overflow-hidden" style={{ borderRadius: '4px' }}>
+                  <div className="px-6 py-4 border-b border-hairline">
                     <h3 className="text-base font-bold text-gray-800 flex items-center gap-2">
                       <BadgeDollarSign className="w-4 h-4 text-emerald-600" />
                       Pagos registrados
@@ -1111,7 +1113,7 @@ const AdminDashboard = () => {
                   ) : (
                     <div className="overflow-x-auto">
                       <table className="w-full min-w-[900px]">
-                        <thead className="bg-gray-50">
+                        <thead className="bg-[#efece6]">
                           <tr>
                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Reserva</th>
                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Apt.</th>
@@ -1124,9 +1126,9 @@ const AdminDashboard = () => {
                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fecha pago</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-100">
+                        <tbody className="divide-y divide-hairline">
                           {payments.map((p) => (
-                            <tr key={p.id} className="hover:bg-gray-50">
+                            <tr key={p.id} className="hover:bg-[#efece6] transition-colors duration-100">
                               <td className="px-4 py-3 text-sm font-medium text-gray-800">#{p.booking_id}</td>
                               <td className="px-4 py-3 text-sm text-gray-600">#{p.apartment_id}</td>
                               <td className="px-4 py-3 text-sm text-gray-800">
@@ -1180,14 +1182,14 @@ const AdminDashboard = () => {
               className="fixed inset-0 z-50 flex items-center justify-center p-4"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-                <div className="bg-gradient-to-r from-primary-600 to-primary-700 px-6 py-4 flex items-center justify-between">
-                  <h2 className="text-2xl font-bold text-white flex items-center">
-                    {isCreatingApartment ? <Plus className="w-6 h-6 mr-2" /> : <Edit className="w-6 h-6 mr-2" />}
+              <div className="bg-paper border border-hairline max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col" style={{ borderRadius: '4px' }}>
+                <div className="bg-ink px-6 py-4 flex items-center justify-between">
+                  <h2 className="font-display text-xl font-bold text-paper flex items-center">
+                    {isCreatingApartment ? <Plus className="w-5 h-5 mr-2" /> : <Edit className="w-5 h-5 mr-2" />}
                     {isCreatingApartment ? 'Nuevo Apartamento' : 'Editar Apartamento'}
                   </h2>
-                  <button onClick={handleCloseApartmentModal} className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-2 transition-colors">
-                    <X className="w-6 h-6" />
+                  <button onClick={handleCloseApartmentModal} className="text-paper/60 hover:text-paper rounded-full p-1.5 transition-colors">
+                    <X className="w-5 h-5" />
                   </button>
                 </div>
 
@@ -1195,7 +1197,7 @@ const AdminDashboard = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
                     <div className="md:col-span-2">
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">Nombre *</label>
+                      <label className="block text-sm font-semibold text-ink mb-2">Nombre *</label>
                       <input type="text" name="name" value={apartmentForm.name} onChange={handleApartmentFormChange}
                         className={`input-field ${apartmentErrors.name ? 'border-red-500' : ''}`}
                         placeholder="Ej: Quadruple 1" />
@@ -1203,13 +1205,13 @@ const AdminDashboard = () => {
                     </div>
 
                     <div className="md:col-span-2">
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">Descripción</label>
+                      <label className="block text-sm font-semibold text-ink mb-2">Descripción</label>
                       <textarea name="description" value={apartmentForm.description} onChange={handleApartmentFormChange}
                         rows="3" className="input-field" placeholder="Descripción del apartamento..." />
                     </div>
 
                     <div className="md:col-span-2">
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      <label className="block text-sm font-semibold text-ink mb-2">
                         <MapPin className="w-4 h-4 inline mr-1" />Dirección *
                       </label>
                       <input type="text" name="address" value={apartmentForm.address} onChange={handleApartmentFormChange}
@@ -1219,7 +1221,7 @@ const AdminDashboard = () => {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      <label className="block text-sm font-semibold text-ink mb-2">
                         <MapPin className="w-4 h-4 inline mr-1" />Ciudad *
                       </label>
                       <input type="text" name="city" value={apartmentForm.city} onChange={handleApartmentFormChange}
@@ -1229,7 +1231,7 @@ const AdminDashboard = () => {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      <label className="block text-sm font-semibold text-ink mb-2">
                         <UsersIcon className="w-4 h-4 inline mr-1" />Huéspedes Máximos *
                       </label>
                       <input type="number" name="max_guests" value={apartmentForm.max_guests} onChange={handleApartmentFormChange}
@@ -1238,7 +1240,7 @@ const AdminDashboard = () => {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      <label className="block text-sm font-semibold text-ink mb-2">
                         <Bed className="w-4 h-4 inline mr-1" />Habitaciones *
                       </label>
                       <input type="number" name="bedrooms" value={apartmentForm.bedrooms} onChange={handleApartmentFormChange}
@@ -1247,7 +1249,7 @@ const AdminDashboard = () => {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      <label className="block text-sm font-semibold text-ink mb-2">
                         <Bath className="w-4 h-4 inline mr-1" />Baños *
                       </label>
                       <input type="number" name="bathrooms" value={apartmentForm.bathrooms} onChange={handleApartmentFormChange}
@@ -1256,7 +1258,7 @@ const AdminDashboard = () => {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      <label className="block text-sm font-semibold text-ink mb-2">
                         <DollarSign className="w-4 h-4 inline mr-1" />Precio por Noche *
                       </label>
                       <input type="number" name="price_per_night" value={apartmentForm.price_per_night} onChange={handleApartmentFormChange}
@@ -1276,13 +1278,13 @@ const AdminDashboard = () => {
                     </div>
 
                     <div className="md:col-span-2">
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">Amenities (separar por comas)</label>
+                      <label className="block text-sm font-semibold text-ink mb-2">Amenities (separar por comas)</label>
                       <input type="text" name="amenities" value={apartmentForm.amenities} onChange={handleApartmentFormChange}
                         className="input-field" placeholder="WiFi, TV, Aire acondicionado, Cocina" />
                     </div>
 
                     <div className="md:col-span-2">
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      <label className="block text-sm font-semibold text-ink mb-2">
                         <ImageIcon className="w-4 h-4 inline mr-1" />URLs de Imágenes (separar por comas)
                       </label>
                       <input type="text" name="images" value={apartmentForm.images} onChange={handleApartmentFormChange}
@@ -1290,7 +1292,7 @@ const AdminDashboard = () => {
                     </div>
                   </div>
 
-                  <div className="flex justify-end space-x-4 mt-6 pt-6 border-t">
+                  <div className="flex justify-end space-x-4 mt-6 pt-6 border-t border-hairline">
                     <motion.button type="button" onClick={handleCloseApartmentModal}
                       whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
                       className="btn-secondary px-6" disabled={apartmentSubmitting}>
@@ -1329,13 +1331,13 @@ const AdminDashboard = () => {
               className="fixed inset-0 z-50 flex items-center justify-center p-4"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-                <div className="bg-gradient-to-r from-primary-600 to-primary-700 px-6 py-4 flex items-center justify-between">
-                  <h2 className="text-2xl font-bold text-white flex items-center">
-                    <Edit className="w-6 h-6 mr-2" />Editar Reserva #{editingBooking.id}
+              <div className="bg-paper border border-hairline max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col" style={{ borderRadius: '4px' }}>
+                <div className="bg-ink px-6 py-4 flex items-center justify-between">
+                  <h2 className="font-display text-xl font-bold text-paper flex items-center">
+                    <Edit className="w-5 h-5 mr-2" />Editar Reserva #{editingBooking.id}
                   </h2>
-                  <button onClick={handleCloseEditBookingModal} className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-2 transition-colors">
-                    <X className="w-6 h-6" />
+                  <button onClick={handleCloseEditBookingModal} className="text-paper/60 hover:text-paper rounded-full p-1.5 transition-colors">
+                    <X className="w-5 h-5" />
                   </button>
                 </div>
 
@@ -1343,11 +1345,11 @@ const AdminDashboard = () => {
 
                   {/* Reserva */}
                   <div>
-                    <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Reserva</h3>
+                    <h3 className="text-xs font-bold text-muted uppercase tracking-wider mb-3">Reserva</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
                       <div className="md:col-span-2">
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">Apartamento *</label>
+                        <label className="block text-sm font-semibold text-ink mb-2">Apartamento *</label>
                         <select name="apartment_id" value={editBookingForm.apartment_id || ''} onChange={handleEditBookingFormChange}
                           className={`input-field ${editBookingErrors.apartment_id ? 'border-red-500' : ''}`}>
                           <option value="">Seleccioná un apartamento</option>
@@ -1361,28 +1363,28 @@ const AdminDashboard = () => {
                       </div>
 
                       <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">Check-in *</label>
+                        <label className="block text-sm font-semibold text-ink mb-2">Check-in *</label>
                         <input type="date" name="check_in" value={editBookingForm.check_in || ''} onChange={handleEditBookingFormChange}
                           className={`input-field ${editBookingErrors.check_in ? 'border-red-500' : ''}`} />
                         {editBookingErrors.check_in && <p className="text-red-500 text-xs mt-1">{editBookingErrors.check_in}</p>}
                       </div>
 
                       <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">Check-out *</label>
+                        <label className="block text-sm font-semibold text-ink mb-2">Check-out *</label>
                         <input type="date" name="check_out" value={editBookingForm.check_out || ''} onChange={handleEditBookingFormChange}
                           className={`input-field ${editBookingErrors.check_out ? 'border-red-500' : ''}`} />
                         {editBookingErrors.check_out && <p className="text-red-500 text-xs mt-1">{editBookingErrors.check_out}</p>}
                       </div>
 
                       <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">Huéspedes *</label>
+                        <label className="block text-sm font-semibold text-ink mb-2">Huéspedes *</label>
                         <input type="number" name="guests" min="1" value={editBookingForm.guests || 1} onChange={handleEditBookingFormChange}
                           className={`input-field ${editBookingErrors.guests ? 'border-red-500' : ''}`} />
                         {editBookingErrors.guests && <p className="text-red-500 text-xs mt-1">{editBookingErrors.guests}</p>}
                       </div>
 
                       <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">Monto total (ARS) *</label>
+                        <label className="block text-sm font-semibold text-ink mb-2">Monto total (ARS) *</label>
                         <input type="number" name="total_price" min="0" step="0.01"
                           value={editBookingForm.total_price ?? ''} onChange={handleEditBookingFormChange}
                           className={`input-field ${editBookingErrors.total_price ? 'border-red-500' : ''}`} />
@@ -1392,7 +1394,7 @@ const AdminDashboard = () => {
 
                       {editingBooking?.status === 'pagado' && (
                         <div>
-                          <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          <label className="block text-sm font-semibold text-ink mb-2">
                             Monto en USD
                             {editingBooking?.exchange_rate_used > 0 && (
                               <span className="ml-2 text-xs font-normal text-gray-400">
@@ -1413,7 +1415,7 @@ const AdminDashboard = () => {
                       )}
 
                       <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">Método de pago *</label>
+                        <label className="block text-sm font-semibold text-ink mb-2">Método de pago *</label>
                         <select name="payment_method" value={editBookingForm.payment_method || 'transferencia'} onChange={handleEditBookingFormChange}
                           className="input-field">
                           <option value="transferencia">Transferencia</option>
@@ -1422,7 +1424,7 @@ const AdminDashboard = () => {
                       </div>
 
                       <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">Estado *</label>
+                        <label className="block text-sm font-semibold text-ink mb-2">Estado *</label>
                         <select name="status" value={editBookingForm.status || 'reservada'} onChange={handleEditBookingFormChange}
                           className="input-field">
                           <option value="reservada">Reservada</option>
@@ -1436,39 +1438,39 @@ const AdminDashboard = () => {
 
                   {/* Huésped */}
                   <div>
-                    <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Datos del huésped</h3>
+                    <h3 className="text-xs font-bold text-muted uppercase tracking-wider mb-3">Datos del huésped</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
                       <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">Nombre *</label>
+                        <label className="block text-sm font-semibold text-ink mb-2">Nombre *</label>
                         <input type="text" name="first_name" value={editBookingForm.first_name || ''} onChange={handleEditBookingFormChange}
                           className={`input-field ${editBookingErrors.first_name ? 'border-red-500' : ''}`} />
                         {editBookingErrors.first_name && <p className="text-red-500 text-xs mt-1">{editBookingErrors.first_name}</p>}
                       </div>
 
                       <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">Apellido *</label>
+                        <label className="block text-sm font-semibold text-ink mb-2">Apellido *</label>
                         <input type="text" name="last_name" value={editBookingForm.last_name || ''} onChange={handleEditBookingFormChange}
                           className={`input-field ${editBookingErrors.last_name ? 'border-red-500' : ''}`} />
                         {editBookingErrors.last_name && <p className="text-red-500 text-xs mt-1">{editBookingErrors.last_name}</p>}
                       </div>
 
                       <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">DNI *</label>
+                        <label className="block text-sm font-semibold text-ink mb-2">DNI *</label>
                         <input type="text" name="dni" value={editBookingForm.dni || ''} onChange={handleEditBookingFormChange}
                           className={`input-field ${editBookingErrors.dni ? 'border-red-500' : ''}`} />
                         {editBookingErrors.dni && <p className="text-red-500 text-xs mt-1">{editBookingErrors.dni}</p>}
                       </div>
 
                       <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">Teléfono *</label>
+                        <label className="block text-sm font-semibold text-ink mb-2">Teléfono *</label>
                         <input type="text" name="phone" value={editBookingForm.phone || ''} onChange={handleEditBookingFormChange}
                           className={`input-field ${editBookingErrors.phone ? 'border-red-500' : ''}`} />
                         {editBookingErrors.phone && <p className="text-red-500 text-xs mt-1">{editBookingErrors.phone}</p>}
                       </div>
 
                       <div className="md:col-span-2">
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">Email *</label>
+                        <label className="block text-sm font-semibold text-ink mb-2">Email *</label>
                         <input type="email" name="email" value={editBookingForm.email || ''} onChange={handleEditBookingFormChange}
                           className={`input-field ${editBookingErrors.email ? 'border-red-500' : ''}`} />
                         {editBookingErrors.email && <p className="text-red-500 text-xs mt-1">{editBookingErrors.email}</p>}
@@ -1477,7 +1479,7 @@ const AdminDashboard = () => {
                     </div>
                   </div>
 
-                  <div className="flex justify-end space-x-4 pt-4 border-t">
+                  <div className="flex justify-end space-x-4 pt-4 border-t border-hairline">
                     <motion.button type="button" onClick={handleCloseEditBookingModal}
                       whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
                       className="btn-secondary px-6" disabled={editBookingSubmitting}>
@@ -1517,13 +1519,13 @@ const AdminDashboard = () => {
               className="fixed inset-0 z-50 flex items-center justify-center p-4"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-                <div className="bg-gradient-to-r from-primary-600 to-primary-700 px-6 py-4 flex items-center justify-between">
-                  <h2 className="text-2xl font-bold text-white flex items-center">
-                    <Plus className="w-6 h-6 mr-2" />Nueva Reserva
+              <div className="bg-paper border border-hairline max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col" style={{ borderRadius: '4px' }}>
+                <div className="bg-ink px-6 py-4 flex items-center justify-between">
+                  <h2 className="font-display text-xl font-bold text-paper flex items-center">
+                    <Plus className="w-5 h-5 mr-2" />Nueva Reserva
                   </h2>
-                  <button onClick={handleCloseNewBookingModal} className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-2 transition-colors">
-                    <X className="w-6 h-6" />
+                  <button onClick={handleCloseNewBookingModal} className="text-paper/60 hover:text-paper rounded-full p-1.5 transition-colors">
+                    <X className="w-5 h-5" />
                   </button>
                 </div>
 
@@ -1531,10 +1533,10 @@ const AdminDashboard = () => {
 
                   {/* Apartamento y fechas */}
                   <div>
-                    <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3">Reserva</h3>
+                    <h3 className="text-xs font-bold text-muted uppercase tracking-wider mb-3">Reserva</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="md:col-span-2">
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">Apartamento *</label>
+                        <label className="block text-sm font-semibold text-ink mb-2">Apartamento *</label>
                         <select name="apartment_id" value={newBookingForm.apartment_id} onChange={handleNewBookingFormChange}
                           className={`input-field ${newBookingErrors.apartment_id ? 'border-red-500' : ''}`}>
                           <option value="">Seleccioná un apartamento</option>
@@ -1547,7 +1549,7 @@ const AdminDashboard = () => {
                         {newBookingErrors.apartment_id && <p className="text-red-500 text-xs mt-1">{newBookingErrors.apartment_id}</p>}
                       </div>
                       <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        <label className="block text-sm font-semibold text-ink mb-2">
                           <Calendar className="w-4 h-4 inline mr-1" />Check-in *
                         </label>
                         <input type="date" name="check_in" value={newBookingForm.check_in} onChange={handleNewBookingFormChange}
@@ -1555,7 +1557,7 @@ const AdminDashboard = () => {
                         {newBookingErrors.check_in && <p className="text-red-500 text-xs mt-1">{newBookingErrors.check_in}</p>}
                       </div>
                       <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        <label className="block text-sm font-semibold text-ink mb-2">
                           <Calendar className="w-4 h-4 inline mr-1" />Check-out *
                         </label>
                         <input type="date" name="check_out" value={newBookingForm.check_out} onChange={handleNewBookingFormChange}
@@ -1563,7 +1565,7 @@ const AdminDashboard = () => {
                         {newBookingErrors.check_out && <p className="text-red-500 text-xs mt-1">{newBookingErrors.check_out}</p>}
                       </div>
                       <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        <label className="block text-sm font-semibold text-ink mb-2">
                           <UsersIcon className="w-4 h-4 inline mr-1" />Huéspedes *
                         </label>
                         <input type="number" name="guests" min="1" value={newBookingForm.guests} onChange={handleNewBookingFormChange}
@@ -1571,7 +1573,7 @@ const AdminDashboard = () => {
                         {newBookingErrors.guests && <p className="text-red-500 text-xs mt-1">{newBookingErrors.guests}</p>}
                       </div>
                       <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        <label className="block text-sm font-semibold text-ink mb-2">
                           <CreditCard className="w-4 h-4 inline mr-1" />Método de Pago *
                         </label>
                         <select name="payment_method" value={newBookingForm.payment_method} onChange={handleNewBookingFormChange}
@@ -1585,28 +1587,28 @@ const AdminDashboard = () => {
 
                   {/* Datos del huésped */}
                   <div>
-                    <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3">Datos del Huésped</h3>
+                    <h3 className="text-xs font-bold text-muted uppercase tracking-wider mb-3">Datos del Huésped</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">Nombre *</label>
+                        <label className="block text-sm font-semibold text-ink mb-2">Nombre *</label>
                         <input type="text" name="first_name" value={newBookingForm.first_name} onChange={handleNewBookingFormChange}
                           className={`input-field ${newBookingErrors.first_name ? 'border-red-500' : ''}`} placeholder="Juan" />
                         {newBookingErrors.first_name && <p className="text-red-500 text-xs mt-1">{newBookingErrors.first_name}</p>}
                       </div>
                       <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">Apellido *</label>
+                        <label className="block text-sm font-semibold text-ink mb-2">Apellido *</label>
                         <input type="text" name="last_name" value={newBookingForm.last_name} onChange={handleNewBookingFormChange}
                           className={`input-field ${newBookingErrors.last_name ? 'border-red-500' : ''}`} placeholder="Pérez" />
                         {newBookingErrors.last_name && <p className="text-red-500 text-xs mt-1">{newBookingErrors.last_name}</p>}
                       </div>
                       <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">DNI *</label>
+                        <label className="block text-sm font-semibold text-ink mb-2">DNI *</label>
                         <input type="text" name="dni" value={newBookingForm.dni} onChange={handleNewBookingFormChange}
                           className={`input-field ${newBookingErrors.dni ? 'border-red-500' : ''}`} placeholder="12345678" />
                         {newBookingErrors.dni && <p className="text-red-500 text-xs mt-1">{newBookingErrors.dni}</p>}
                       </div>
                       <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        <label className="block text-sm font-semibold text-ink mb-2">
                           <Phone className="w-4 h-4 inline mr-1" />Teléfono *
                         </label>
                         <input type="text" name="phone" value={newBookingForm.phone} onChange={handleNewBookingFormChange}
@@ -1614,7 +1616,7 @@ const AdminDashboard = () => {
                         {newBookingErrors.phone && <p className="text-red-500 text-xs mt-1">{newBookingErrors.phone}</p>}
                       </div>
                       <div className="md:col-span-2">
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        <label className="block text-sm font-semibold text-ink mb-2">
                           <Mail className="w-4 h-4 inline mr-1" />Email *
                         </label>
                         <input type="email" name="email" value={newBookingForm.email} onChange={handleNewBookingFormChange}
@@ -1624,7 +1626,7 @@ const AdminDashboard = () => {
                     </div>
                   </div>
 
-                  <div className="flex justify-end space-x-4 pt-4 border-t">
+                  <div className="flex justify-end space-x-4 pt-4 border-t border-hairline">
                     <motion.button type="button" onClick={handleCloseNewBookingModal}
                       whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
                       className="btn-secondary px-6" disabled={newBookingSubmitting}>

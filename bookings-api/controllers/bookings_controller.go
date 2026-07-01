@@ -1,11 +1,13 @@
 package controllers
 
 import (
+	"encoding/json"
 	"log"
 	"net/http"
 	"strconv"
 
 	"bookings-api/domain"
+	"bookings-api/middleware"
 	"bookings-api/services"
 
 	"github.com/gin-gonic/gin"
@@ -17,11 +19,13 @@ type markAsPaidRequest struct {
 
 type BookingController struct {
 	bookingService services.BookingService
+	webhookSecret  string
 }
 
-func NewBookingController(bookingService services.BookingService) *BookingController {
+func NewBookingController(bookingService services.BookingService, webhookSecret string) *BookingController {
 	return &BookingController{
 		bookingService: bookingService,
+		webhookSecret:  webhookSecret,
 	}
 }
 
@@ -306,22 +310,31 @@ func (c *BookingController) CreateCheckout(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, checkout)
 }
 
-// HandlePaymentWebhook procesa las notificaciones de pago de Mercado Pago
+// HandlePaymentWebhook procesa las notificaciones de pago enviadas por Mercado Pago.
+// Valida la firma x-signature cuando MP_WEBHOOK_SECRET está configurado.
+// Siempre responde 200 OK para que MP no reintente indefinidamente.
 func (c *BookingController) HandlePaymentWebhook(ctx *gin.Context) {
-	// MP puede enviar el id como query param (IPN legacy) o como JSON body (webhooks)
+	// IPN legacy: query params ?topic=payment&id=XXX (sin firma)
 	if topic := ctx.Query("topic"); topic == "payment" {
 		paymentID := ctx.Query("id")
 		if paymentID != "" {
 			if err := c.bookingService.ConfirmPaymentFromWebhook(ctx.Request.Context(), paymentID); err != nil {
-				log.Printf("[webhook] error processing payment %s: %v", paymentID, err)
+				log.Printf("[webhook] error processing IPN payment %s: %v", paymentID, err)
 			}
 		}
 		ctx.JSON(http.StatusOK, gin.H{"message": "ok"})
 		return
 	}
 
+	// Webhooks v2: JSON body con firma opcional
+	body, err := ctx.GetRawData()
+	if err != nil || len(body) == 0 {
+		ctx.JSON(http.StatusOK, gin.H{"message": "ok"})
+		return
+	}
+
 	var notification map[string]interface{}
-	if err := ctx.ShouldBindJSON(&notification); err != nil {
+	if err := json.Unmarshal(body, &notification); err != nil {
 		ctx.JSON(http.StatusOK, gin.H{"message": "ok"})
 		return
 	}
@@ -346,13 +359,117 @@ func (c *BookingController) HandlePaymentWebhook(ctx *gin.Context) {
 		paymentID = strconv.FormatInt(int64(v), 10)
 	}
 
-	if paymentID != "" {
-		if err := c.bookingService.ConfirmPaymentFromWebhook(ctx.Request.Context(), paymentID); err != nil {
-			log.Printf("[webhook] error processing payment %s: %v", paymentID, err)
+	if paymentID == "" {
+		ctx.JSON(http.StatusOK, gin.H{"message": "ok"})
+		return
+	}
+
+	// Validar firma si el secret está configurado (webhooks reales de MP)
+	webhookSecret := c.webhookSecret
+	if webhookSecret != "" {
+		xSig := ctx.GetHeader("x-signature")
+		xReqID := ctx.GetHeader("x-request-id")
+		if xSig != "" && !middleware.ValidateMPSignature(webhookSecret, xSig, xReqID, paymentID) {
+			log.Printf("[webhook] firma inválida para payment %s — rechazado", paymentID)
+			ctx.JSON(http.StatusOK, gin.H{"message": "ok"}) // 200 para que MP no reintente
+			return
 		}
 	}
 
+	if err := c.bookingService.ConfirmPaymentFromWebhook(ctx.Request.Context(), paymentID); err != nil {
+		log.Printf("[webhook] error processing payment %s: %v", paymentID, err)
+	}
+
 	ctx.JSON(http.StatusOK, gin.H{"message": "ok"})
+}
+
+// ConfirmPaymentFromBrowser es llamado por PaymentResultPage después de que MP redirige al browser.
+// No requiere firma — la validación real ocurre en ConfirmPaymentFromWebhook vía la API de MP.
+func (c *BookingController) ConfirmPaymentFromBrowser(ctx *gin.Context) {
+	var body struct {
+		PaymentID string `json:"payment_id" binding:"required"`
+	}
+	if err := ctx.ShouldBindJSON(&body); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "payment_id requerido"})
+		return
+	}
+
+	if err := c.bookingService.ConfirmPaymentFromWebhook(ctx.Request.Context(), body.PaymentID); err != nil {
+		log.Printf("[confirm-browser] error: %v", err)
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{"message": "ok"})
+}
+
+// CheckAvailabilityBatch recibe una lista de IDs + fechas y devuelve cuáles están disponibles
+func (c *BookingController) CheckAvailabilityBatch(ctx *gin.Context) {
+	var req domain.AvailabilityBatchRequest
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	resp, err := c.bookingService.CheckAvailabilityBatch(ctx.Request.Context(), req)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, resp)
+}
+
+// GetBookingByContact busca reservas por DNI + email del huésped (para huéspedes sin número de reserva)
+func (c *BookingController) GetBookingByContact(ctx *gin.Context) {
+	dni := ctx.Query("dni")
+	email := ctx.Query("email")
+	if dni == "" || email == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "dni y email son requeridos"})
+		return
+	}
+
+	bookings, err := c.bookingService.GetBookingsByGuestContact(ctx.Request.Context(), dni, email)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if len(bookings) == 0 {
+		ctx.JSON(http.StatusNotFound, gin.H{"error": "no se encontraron reservas con esos datos"})
+		return
+	}
+
+	responses := make([]*domain.BookingResponse, 0, len(bookings))
+	for _, b := range bookings {
+		responses = append(responses, b.ToBookingResponse())
+	}
+	ctx.JSON(http.StatusOK, gin.H{"data": responses})
+}
+
+// CancelBookingByGuest permite al huésped cancelar su reserva con un motivo opcional.
+func (c *BookingController) CancelBookingByGuest(ctx *gin.Context) {
+	id, err := strconv.ParseInt(ctx.Param("id"), 10, 64)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "id de reserva inválido"})
+		return
+	}
+
+	var body struct {
+		Reason string `json:"reason"`
+	}
+	ctx.ShouldBindJSON(&body)
+
+	booking, err := c.bookingService.CancelBookingByGuest(ctx.Request.Context(), id, body.Reason)
+	if err != nil {
+		if err.Error() == "booking not found" {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": "reserva no encontrada"})
+			return
+		}
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, booking.ToBookingResponse())
 }
 
 // VerifyPayment consulta MP directamente para confirmar si hay un pago aprobado para la reserva.

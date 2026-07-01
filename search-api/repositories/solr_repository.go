@@ -117,9 +117,8 @@ func (r *solrRepository) Search(req domain.SearchRequest) (*domain.SearchRespons
 	if req.Capacity > 0 {
 		filters = append(filters, fmt.Sprintf("max_guests:[%d TO *]", req.Capacity))
 	}
-	// Nota: La validación de disponibilidad se hace después, consultando bookings-api
-	// Por ahora, no filtramos por available en Solr (el campo puede no estar indexado aún)
-	// En producción, se puede agregar cuando el campo esté disponible
+	// Siempre excluir apartamentos marcados como no disponibles por el admin
+	filters = append(filters, "available:true")
 
 	// Paginación
 	page := req.Page

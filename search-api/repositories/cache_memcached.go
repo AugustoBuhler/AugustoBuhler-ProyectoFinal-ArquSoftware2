@@ -12,6 +12,7 @@ import (
 type MemcachedCache interface {
 	Get(key string) (interface{}, bool)
 	Set(key string, value interface{}, ttl time.Duration) error
+	Flush()
 }
 
 type memcachedCache struct {
@@ -40,6 +41,10 @@ func (c *memcachedCache) Get(key string) (interface{}, bool) {
 	}
 
 	return result, true
+}
+
+func (c *memcachedCache) Flush() {
+	c.client.FlushAll()
 }
 
 func (c *memcachedCache) Set(key string, value interface{}, ttl time.Duration) error {

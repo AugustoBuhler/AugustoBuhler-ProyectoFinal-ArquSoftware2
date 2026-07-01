@@ -153,6 +153,7 @@ services:
       - APARTMENTS_API_URL=http://apartments-api:8081
       - RABBITMQ_URL=amqp://admin:admin@rabbitmq:5672/
       - JWT_SECRET=your-secret-key-change-in-production
+      - MP_WEBHOOK_SECRET=${MP_WEBHOOK_SECRET}
       - MP_ACCESS_TOKEN=${MP_ACCESS_TOKEN}
       - MP_PUBLIC_KEY=${MP_PUBLIC_KEY}
       - NGROK_URL=${NGROK_URL}
@@ -178,6 +179,7 @@ services:
       - SOLR_URL=http://solr:8983/solr/apartments
       - MEMCACHED_URL=memcached:11211
       - APARTMENTS_API_URL=http://apartments-api:8081
+      - BOOKINGS_API_URL=http://bookings-api:8082
       - RABBITMQ_URL=amqp://admin:admin@rabbitmq:5672/
     depends_on:
       solr:
@@ -200,6 +202,7 @@ services:
       - BOOKINGS_API_URL=http://bookings-api:8082
       - RESEND_API_KEY=${RESEND_API_KEY:-}
       - FROM_EMAIL=${FROM_EMAIL:-Reservas <onboarding@resend.dev>}
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-augusto.buhler03@gmail.com}
     depends_on:
       rabbitmq:
         condition: service_healthy

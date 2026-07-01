@@ -25,6 +25,7 @@ type Booking struct {
 	MPPaymentID    string  `json:"mp_payment_id"`
 	PaymentMethod  string  `json:"payment_method"`
 	Status         string  `json:"status"`
+	CancelReason   string  `json:"cancel_reason"`
 }
 
 // bookingAPIResponse refleja exactamente la respuesta de bookings-api
@@ -46,6 +47,7 @@ type bookingAPIResponse struct {
 	MPPaymentID   string  `json:"mp_payment_id"`
 	PaymentMethod string  `json:"payment_method"`
 	Status        string  `json:"status"`
+	CancelReason  string  `json:"cancel_reason"`
 }
 
 type BookingsClient interface {
@@ -107,5 +109,6 @@ func (c *bookingsClient) GetBookingByID(id int64) (*Booking, error) {
 		MPPaymentID:    raw.MPPaymentID,
 		PaymentMethod:  raw.PaymentMethod,
 		Status:         raw.Status,
+		CancelReason:   raw.CancelReason,
 	}, nil
 }

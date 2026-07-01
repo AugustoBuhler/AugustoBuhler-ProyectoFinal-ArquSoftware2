@@ -6,18 +6,12 @@ import { login, setAuthToken, setUser } from '../services/auth'
 
 const AdminLoginPage = () => {
   const navigate = useNavigate()
-  const [formData, setFormData] = useState({
-    username: '',
-    password: '',
-  })
+  const [formData, setFormData] = useState({ username: '', password: '' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
   const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    })
+    setFormData({ ...formData, [e.target.name]: e.target.value })
     setError('')
   }
 
@@ -25,15 +19,12 @@ const AdminLoginPage = () => {
     e.preventDefault()
     setError('')
     setLoading(true)
-
     try {
       const response = await login(formData.username, formData.password)
-      
       if (response.user.user_type !== 'admin') {
         setError('Solo los administradores pueden acceder a esta sección')
         return
       }
-
       setAuthToken(response.token)
       setUser(response.user)
       navigate('/admin/dashboard')
@@ -45,43 +36,44 @@ const AdminLoginPage = () => {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-paper px-4">
       <motion.div
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.3 }}
-        className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+        className="border border-hairline bg-paper w-full max-w-md p-10"
+        style={{ borderRadius: '4px' }}
       >
-        <div className="text-center mb-8">
+        <div className="text-center mb-10">
           <motion.div
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ delay: 0.2, type: 'spring' }}
-            className="inline-block p-4 bg-primary-100 rounded-full mb-4"
+            className="inline-flex items-center justify-center w-14 h-14 rounded-full border border-hairline bg-[#efece6] mb-5"
           >
-            <Lock className="w-12 h-12 text-primary-600" />
+            <Lock className="w-7 h-7 text-primary-600" />
           </motion.div>
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">Panel Administrativo</h1>
-          <p className="text-gray-600">Ingresa tus credenciales para continuar</p>
+          <h1 className="font-display text-[28px] font-bold text-ink mb-1">Panel Administrativo</h1>
+          <p className="text-ink-soft text-sm">Ingresá tus credenciales para continuar</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-5">
           {error && (
             <motion.div
-              initial={{ opacity: 0, y: -10 }}
+              initial={{ opacity: 0, y: -6 }}
               animate={{ opacity: 1, y: 0 }}
-              className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg"
+              className="border border-red-200 bg-red-50 text-red-700 px-4 py-3 rounded text-sm"
             >
               {error}
             </motion.div>
           )}
 
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
+            <label className="block text-[13px] font-semibold text-ink tracking-[0.08em] uppercase mb-2">
               Usuario
             </label>
             <div className="relative">
-              <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+              <User className="absolute left-4 top-1/2 -translate-y-1/2 text-muted w-4 h-4 pointer-events-none" />
               <input
                 type="text"
                 name="username"
@@ -95,11 +87,11 @@ const AdminLoginPage = () => {
           </div>
 
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
+            <label className="block text-[13px] font-semibold text-ink tracking-[0.08em] uppercase mb-2">
               Contraseña
             </label>
             <div className="relative">
-              <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-muted w-4 h-4 pointer-events-none" />
               <input
                 type="password"
                 name="password"
@@ -114,16 +106,16 @@ const AdminLoginPage = () => {
 
           <motion.button
             type="submit"
-            whileHover={{ scale: 1.02 }}
+            whileHover={{ y: -1 }}
             whileTap={{ scale: 0.98 }}
             disabled={loading}
-            className="btn-primary w-full flex items-center justify-center"
+            className="btn-primary w-full py-4 text-base disabled:opacity-60"
           >
             {loading ? (
-              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              <div className="w-5 h-5 border-2 border-paper border-t-transparent rounded-full animate-spin mx-auto" />
             ) : (
               <>
-                <LogIn className="w-5 h-5 mr-2" />
+                <LogIn className="w-4 h-4 mr-2" />
                 Iniciar Sesión
               </>
             )}
@@ -131,7 +123,7 @@ const AdminLoginPage = () => {
         </form>
 
         <div className="mt-6 text-center">
-          <a href="/" className="text-sm text-primary-600 hover:text-primary-700">
+          <a href="/" className="text-sm text-ink-soft hover:text-primary-600 transition-colors duration-150">
             ← Volver al inicio
           </a>
         </div>
@@ -141,4 +133,3 @@ const AdminLoginPage = () => {
 }
 
 export default AdminLoginPage
-

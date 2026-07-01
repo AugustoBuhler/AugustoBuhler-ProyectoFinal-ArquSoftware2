@@ -26,13 +26,14 @@ func main() {
 	localCache := repositories.NewLocalCache()
 	memcachedCache := repositories.NewMemcachedCache()
 	apartmentsClient := repositories.NewApartmentsClient()
+	bookingsClient := repositories.NewBookingsClient()
 
 	// Inicializar servicio
-	searchService := services.NewSearchService(solrRepo, localCache, memcachedCache, apartmentsClient)
+	searchService := services.NewSearchService(solrRepo, localCache, memcachedCache, apartmentsClient, bookingsClient)
 	searchController := controllers.NewSearchController(searchService)
 
 	// Inicializar consumidor RabbitMQ
-	rmqConsumer, err := consumers.NewRabbitMQConsumer(apartmentsClient, solrRepo)
+	rmqConsumer, err := consumers.NewRabbitMQConsumer(apartmentsClient, searchService)
 	if err != nil {
 		log.Fatal("Failed to create RabbitMQ consumer:", err)
 	}
@@ -47,11 +48,13 @@ func main() {
 	// Configurar router
 	router := gin.Default()
 
-	// CORS middleware
+	// CORS + no-cache middleware
 	router.Use(func(c *gin.Context) {
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		c.Writer.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
+		c.Writer.Header().Set("Pragma", "no-cache")
 		if c.Request.Method == "OPTIONS" {
 			c.AbortWithStatus(204)
 			return

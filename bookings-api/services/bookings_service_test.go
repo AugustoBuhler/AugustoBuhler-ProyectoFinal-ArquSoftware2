@@ -96,6 +96,15 @@ func (m *mockBookingRepo) MarkDepositPaid(ctx context.Context, id int64, payment
 func (m *mockBookingRepo) CancelExpiredPendingBookings(ctx context.Context, maxAge time.Duration) (int, error) {
 	return 0, nil
 }
+func (m *mockBookingRepo) CancelWithReason(ctx context.Context, id int64, reason string) error {
+	return nil
+}
+func (m *mockBookingRepo) FindByDNIAndEmail(ctx context.Context, dni, email string) ([]*domain.Booking, error) {
+	return []*domain.Booking{}, nil
+}
+func (m *mockBookingRepo) GetBookedApartmentIDs(ctx context.Context, ids []int64, checkIn, checkOut time.Time) (map[int64]bool, error) {
+	return map[int64]bool{}, nil
+}
 
 type mockMPClient struct{}
 
@@ -184,7 +193,7 @@ func baseRequest(aptType string) domain.CreateBookingRequest {
 			LastName:  "Perez",
 			DNI:       "12345678",
 			Phone:     "+5491123456789",
-			Email:     "juan@example.com",
+			Email:     "juan@gmail.com",
 		},
 	}
 }

@@ -9,6 +9,7 @@ import (
 type LocalCache interface {
 	Get(key string) (interface{}, bool)
 	Set(key string, value interface{}, ttl time.Duration)
+	Flush()
 }
 
 type localCache struct {
@@ -28,5 +29,9 @@ func (c *localCache) Get(key string) (interface{}, bool) {
 
 func (c *localCache) Set(key string, value interface{}, ttl time.Duration) {
 	c.cache.Set(key, value, ttl)
+}
+
+func (c *localCache) Flush() {
+	c.cache.Flush()
 }
 

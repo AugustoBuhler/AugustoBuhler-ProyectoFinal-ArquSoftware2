@@ -9,24 +9,25 @@ Este archivo es el punto de entrada para retomar el proyecto en cualquier sesió
 
 Sistema de reservas de apartamentos amoblados basado en microservicios Go + React.
 Proyecto académico (Arquitectura de Software II) con integración real de Mercado Pago.
+Nombre comercial: **Docta Suites**.
 
 ---
 
 ## Stack y puertos
 
-| Servicio           | Puerto          | BD                  |
-|--------------------|-----------------|---------------------|
-| frontend           | 3000            | —                   |
-| users-api          | 8080            | MySQL               |
-| apartments-api     | 8081            | MongoDB             |
-| bookings-api       | 8082            | MongoDB + MySQL     |
-| search-api         | 8083            | Solr + Memcached    |
-| notifications-api  | interno (no HTTP)| —                  |
-| mysql              | 3306            |                     |
-| mongodb            | 27017           |                     |
-| rabbitmq           | 5672 / 15672 UI |                     |
-| solr               | 8983            |                     |
-| memcached          | 11211           |                     |
+| Servicio           | Puerto           | BD                  |
+|--------------------|------------------|---------------------|
+| frontend           | 3000             | —                   |
+| users-api          | 8080             | MySQL               |
+| apartments-api     | 8081             | MongoDB             |
+| bookings-api       | 8082             | MongoDB + MySQL     |
+| search-api         | 8083             | Solr + Memcached    |
+| notifications-api  | interno (no HTTP)| —                   |
+| mysql              | 3306             |                     |
+| mongodb            | 27017            |                     |
+| rabbitmq           | 5672 / 15672 UI  |                     |
+| solr               | 8983             |                     |
+| memcached          | 11211            |                     |
 
 Credenciales dev: `root/root` MySQL y MongoDB. RabbitMQ: `admin/admin`.
 JWT_SECRET en `docker-compose.yml` (cambiar en producción).
@@ -47,6 +48,34 @@ cd bookings-api && go test ./services/... -v   # correr tests
 > Si al levantar hay error de puerto ocupado, verificar contenedores de otros proyectos:
 > `docker ps` y hacer `docker stop <nombre>` de los que estén usando el puerto.
 
+### Re-indexar Solr manualmente (si los precios o datos están desactualizados)
+
+```bash
+# 1. Borrar todos los docs
+curl -X POST "http://localhost:8983/solr/apartments/update?commit=true" \
+  -H "Content-Type: application/json" -d '{"delete": {"query": "*:*"}}'
+
+# 2. Re-indexar desde apartments-api
+curl -s "http://localhost:8081/api/v1/apartments?size=100" | python3 -c "
+import json, sys, urllib.request
+data = json.load(sys.stdin)
+docs = [{'id': str(a['id']), 'name': a.get('name',''), 'description': a.get('description',''),
+         'address': a.get('address',''), 'city': a.get('city',''),
+         'price_per_night': a.get('price_per_night',0), 'max_guests': a.get('max_guests',1),
+         'bedrooms': a.get('bedrooms',1), 'bathrooms': a.get('bathrooms',1),
+         'available': a.get('available',True), 'amenities': a.get('amenities') or [],
+         'images': a.get('images') or []} for a in (data.get('data') or [])]
+req = urllib.request.Request('http://localhost:8983/solr/apartments/update/json/docs?commit=true',
+      data=json.dumps(docs).encode(), headers={'Content-Type': 'application/json'}, method='POST')
+resp = urllib.request.urlopen(req)
+print(json.loads(resp.read()))
+"
+
+# 3. Limpiar caché
+echo "flush_all" | nc -w1 localhost 11211
+docker restart search-api
+```
+
 ---
 
 ## Flujos principales
@@ -58,7 +87,7 @@ cd bookings-api && go test ./services/... -v   # correr tests
 4. `POST /api/v1/bookings/:id/checkout` → crea preferencia en Mercado Pago, devuelve `init_point`
 5. Frontend navega a `/reserva/pago/esperando?id=X&mp=<init_point>&type=<tipo>` y abre MP en nueva pestaña
 6. Usuario paga en la pestaña de MP → MP redirige a `localhost:3000/reserva/pago/resultado?status=approved&payment_id=XXX`
-7. `PaymentResultPage` llama `POST /api/v1/payments/webhook` localmente (sin ngrok) → bookings-api procesa, pone `deposit_paid=true`
+7. `PaymentResultPage` llama `POST /api/v1/payments/confirm` localmente → bookings-api procesa, pone `deposit_paid=true`
 8. `PaymentResultPage` cierra la pestaña con `window.close()`
 9. `PaymentWaitingPage` (tab principal) detecta `deposit_paid=true` via polling cada 3s → muestra confirmación con datos de la reserva
 10. RabbitMQ publica evento `payment_confirmed` → notifications-api envía email via Resend
@@ -71,8 +100,17 @@ cd bookings-api && go test ./services/... -v   # correr tests
 
 ### Búsqueda
 - `GET /api/v1/search` en search-api (8083)
+- Filtros disponibles: `capacity`, `check_in`, `check_out` (nombre/ciudad/precio eliminados del frontend)
 - Cache-aside: caché local Go (5 min) → Memcached (15 min) → Solr
-- Solr se sincroniza via eventos RabbitMQ de apartments-api (creación/edición/eliminación)
+- Solr siempre filtra `available:true` — apartamentos marcados no disponibles no aparecen nunca
+- Cuando se busca con fechas, se filtra además por disponibilidad real consultando bookings-api
+- Al actualizar o eliminar un apartamento vía RabbitMQ, ambas cachés se invalidan inmediatamente
+- El frontend agrega `_t=Date.now()` a cada request para evitar caché del browser
+
+### Disponibilidad de apartamentos (admin)
+El admin puede marcar un apartamento como "no disponible" (ej: refacciones).
+El cambio se propaga: admin panel → apartments-api → RabbitMQ `updated` → search-api consumer
+→ re-indexa en Solr con `available=false` + flushea caché → desaparece de búsqueda inmediatamente.
 
 ---
 
@@ -81,40 +119,50 @@ cd bookings-api && go test ./services/... -v   # correr tests
 ### Pagos con Mercado Pago
 - [bookings-api/clients/mercadopago_client.go](bookings-api/clients/mercadopago_client.go) — SDK MP, creación de preferencia, verificación de pago
 - [bookings-api/services/bookings_service.go](bookings-api/services/bookings_service.go) — `CreateCheckout`, `ConfirmPaymentFromWebhook`
-- [bookings-api/controllers/bookings_controller.go](bookings-api/controllers/bookings_controller.go) — handlers `CreateCheckout`, `HandlePaymentWebhook`
+- [bookings-api/controllers/bookings_controller.go](bookings-api/controllers/bookings_controller.go) — handlers `CreateCheckout`, `HandlePaymentWebhook`, `ConfirmPaymentFromBrowser`
+- [bookings-api/middleware/mp_webhook.go](bookings-api/middleware/mp_webhook.go) — validación HMAC-SHA256 firma x-signature de MP
 - [frontend/src/pages/PaymentWaitingPage.jsx](frontend/src/pages/PaymentWaitingPage.jsx) — pantalla de espera con polling
 - [frontend/src/pages/PaymentResultPage.jsx](frontend/src/pages/PaymentResultPage.jsx) — página en pestaña MP, dispara webhook local y cierra pestaña
-- [frontend/src/services/api.js](frontend/src/services/api.js) — `createCheckout`, `triggerPaymentWebhook`
+- [frontend/src/services/api.js](frontend/src/services/api.js) — `createCheckout`, `triggerPaymentWebhook`, `verifyPayment`
 
 ### Reservas (lógica crítica)
-- [bookings-api/domain/booking.go](bookings-api/domain/booking.go) — modelos, DateOnly, CheckoutResponse
-- [bookings-api/services/bookings_service.go](bookings-api/services/bookings_service.go) — lógica de negocio, concurrencia, validaciones
-- [bookings-api/repositories/bookings_repository.go](bookings-api/repositories/bookings_repository.go) — queries MongoDB, CheckAvailability, SaveMPPreferenceID, MarkDepositPaid
-- [bookings-api/main.go](bookings-api/main.go) — setup, scheduler diario, rutas, redirect handler `/api/v1/payments/return`
+- [bookings-api/domain/booking.go](bookings-api/domain/booking.go) — modelos, DateOnly, CheckoutResponse, AvailabilityBatchRequest
+- [bookings-api/services/bookings_service.go](bookings-api/services/bookings_service.go) — lógica de negocio, concurrencia, validaciones, cancelación por huésped
+- [bookings-api/repositories/bookings_repository.go](bookings-api/repositories/bookings_repository.go) — queries MongoDB, CheckAvailability, GetBookedApartmentIDs, CancelWithReason
+- [bookings-api/main.go](bookings-api/main.go) — setup, scheduler diario (00:05 UTC), scheduler pendientes (cada 5 min), rutas
+
+### Autenticación y autorización
+- [users-api/services/user_service.go](users-api/services/user_service.go) — genera JWT (HS256) con `user_id`, `email`, `user_type`
+- [bookings-api/middleware/auth.go](bookings-api/middleware/auth.go) — `AdminRequired`: valida JWT, verifica `user_type == "admin"`, inyecta `admin_user_id` en contexto Gin
+- [apartments-api/middleware/auth.go](apartments-api/middleware/auth.go) — mismo middleware `AdminRequired`
+- [frontend/src/services/auth.js](frontend/src/services/auth.js) — `isAdmin()` verifica `user_type` en localStorage
+- [frontend/src/components/ProtectedRoute.jsx](frontend/src/components/ProtectedRoute.jsx) — protege rutas `/admin/*`
 
 ### Email de confirmación
-- [notifications-api/clients/email_client.go](notifications-api/clients/email_client.go) — template HTML completo con seña, comprobante MP y Google Maps
+- [notifications-api/clients/email_client.go](notifications-api/clients/email_client.go) — templates HTML: confirmación de reserva + cancelación al admin
 - [notifications-api/clients/bookings_client.go](notifications-api/clients/bookings_client.go) — fetcha datos de la reserva desde bookings-api
-- [notifications-api/consumers/rabbitmq_consumer.go](notifications-api/consumers/rabbitmq_consumer.go) — escucha eventos `created` y `payment_confirmed`
-
-### Autenticación
-- [users-api/services/user_service.go](users-api/services/user_service.go) — genera JWT (único servicio que lo hace)
-- [frontend/src/services/auth.js](frontend/src/services/auth.js)
-- [frontend/src/components/ProtectedRoute.jsx](frontend/src/components/ProtectedRoute.jsx)
+- [notifications-api/consumers/rabbitmq_consumer.go](notifications-api/consumers/rabbitmq_consumer.go) — escucha `created`, `payment_confirmed`, `guest_cancelled`; retry con backoff (3 reintentos: 5s/10s/15s para fetch, 10s/20s/30s para email)
 
 ### Apartamentos y tipos
 - [apartments-api/services/apartments_service.go](apartments-api/services/apartments_service.go)
 - [apartments-api/controllers/apartments_controller.go](apartments-api/controllers/apartments_controller.go)
-- [frontend/src/pages/HomePage.jsx](frontend/src/pages/HomePage.jsx) — incluye banner de confirmación post-pago
+- [frontend/src/pages/HomePage.jsx](frontend/src/pages/HomePage.jsx) — banner post-pago, stats strip, tipos de habitación, sección "Por qué Docta"
 
 ### Búsqueda e indexación
-- [search-api/services/search_service.go](search-api/services/search_service.go)
-- [search-api/consumers/rabbitmq_consumer.go](search-api/consumers/rabbitmq_consumer.go)
-- [search-api/repositories/solr_repository.go](search-api/repositories/solr_repository.go)
+- [search-api/services/search_service.go](search-api/services/search_service.go) — doble caché + filtrado por bookings-api + flush en updates
+- [search-api/consumers/rabbitmq_consumer.go](search-api/consumers/rabbitmq_consumer.go) — usa `SearchService.UpdateApartment` (incluye flush de caché)
+- [search-api/repositories/solr_repository.go](search-api/repositories/solr_repository.go) — siempre agrega `fq=available:true` a la query
+- [search-api/repositories/cache_local.go](search-api/repositories/cache_local.go) — interfaz con método `Flush()`
+- [search-api/repositories/cache_memcached.go](search-api/repositories/cache_memcached.go) — interfaz con método `Flush()`
+- [search-api/repositories/bookings_client.go](search-api/repositories/bookings_client.go) — filtra disponibilidad real por fechas via bookings-api
 
 ### Panel admin (frontend)
-- [frontend/src/pages/AdminDashboard.jsx](frontend/src/pages/AdminDashboard.jsx)
-- [frontend/src/services/adminApi.js](frontend/src/services/adminApi.js)
+- [frontend/src/pages/AdminDashboard.jsx](frontend/src/pages/AdminDashboard.jsx) — gestión apartamentos, reservas, finanzas (tipo de cambio, stats, pagos, cotizaciones)
+- [frontend/src/services/adminApi.js](frontend/src/services/adminApi.js) — todas las llamadas admin incluyendo `markBookingAsPaid`, `getDollarRate`, `getMarketRates`
+
+### Estado de reserva (frontend público)
+- [frontend/src/pages/BookingStatusPage.jsx](frontend/src/pages/BookingStatusPage.jsx) — búsqueda por ID o DNI+email, cancelación con motivo
+- [frontend/src/pages/BookingPage.jsx](frontend/src/pages/BookingPage.jsx) — formulario de reserva con check de disponibilidad en tiempo real (debounce 500ms)
 
 ---
 
@@ -139,7 +187,24 @@ Excluye reservas con status `cancelled` o `concluida`. Modificar esta query pued
 ### Eventos RabbitMQ
 - Reserva pública: NO publica `created` al crear. Publica `payment_confirmed` cuando el webhook de MP confirma el pago.
 - Reserva admin: publica `created` al crear (email inmediato, sin pasar por MP).
-- notifications-api escucha ambos eventos: `created` y `payment_confirmed`.
+- notifications-api escucha: `created`, `payment_confirmed`, `guest_cancelled`.
+- search-api escucha: `created`, `updated`, `deleted` de apartments.events — al recibir `updated`, re-indexa en Solr Y flushea ambas cachés.
+
+### Filtro de disponibilidad en búsqueda
+`solr_repository.go` siempre agrega `fq=available:true`. Nunca eliminar este filtro.
+La invalidación de caché ocurre en `search_service.UpdateApartment` y `DeleteApartment`.
+El consumer de RabbitMQ llama `searchService.UpdateApartment` (no `solrRepo.IndexApartment` directamente).
+
+---
+
+## Estado actual de autenticación JWT
+
+| Servicio        | Estado |
+|-----------------|--------|
+| users-api       | ✅ Genera y firma JWT (HS256) con `user_id`, `email`, `user_type` |
+| bookings-api    | ✅ `AdminRequired` middleware en todas las rutas admin; `admin_user_id` se lee del contexto Gin |
+| apartments-api  | ✅ `AdminRequired` middleware en POST/PATCH/DELETE; rutas GET son públicas |
+| frontend        | ⚠️ `isAdmin()` solo verifica `user_type` en localStorage — no valida firma ni expiración del JWT |
 
 ---
 
@@ -148,7 +213,7 @@ Excluye reservas con status `cancelled` o `concluida`. Modificar esta query pued
 ### Por qué el webhook lo dispara el frontend (no MP directamente)
 En desarrollo, ngrok tuneliza solo al puerto 8082 (bookings-api). Si se usan URLs de ngrok en los `back_urls` de MP, la pestaña de MP redirige al ngrok URL que: (a) muestra advertencia de ngrok en modo incógnito, (b) no lleva al frontend.
 
-**Solución implementada:** `PaymentResultPage` (que corre en el browser del usuario en `localhost:3000`) llama directamente a `POST localhost:8082/api/v1/payments/webhook`. No necesita ngrok ni red pública.
+**Solución implementada:** `PaymentResultPage` llama directamente a `POST localhost:8082/api/v1/payments/confirm`. No necesita ngrok ni red pública.
 
 **En producción:** El webhook real de MP llega automáticamente al servidor público. `PaymentResultPage` seguirá funcionando como fallback pero no será necesario.
 
@@ -156,13 +221,14 @@ En desarrollo, ngrok tuneliza solo al puerto 8082 (bookings-api). Si se usan URL
 Simplicidad. El polling cada 3 segundos tiene latencia aceptable (<3s) y no requiere cambios en la arquitectura de ningún microservicio Go.
 
 ### Por qué MP abre en nueva pestaña
-Si se redirige el tab principal a MP (`window.location.href`), después del pago MP redirige al `back_url` en esa misma pestaña. Con `localhost` como back_url, MP no muestra botón de retorno ni hace auto-redirect. Con ngrok como back_url, la pestaña queda en ngrok (no en el frontend). Abrir en nueva pestaña y usar polling en el tab principal resuelve ambos problemas.
+Si se redirige el tab principal a MP, después del pago MP redirige al `back_url` en esa misma pestaña. Con `localhost` como back_url, MP no hace auto-redirect. Abrir en nueva pestaña y usar polling en el tab principal resuelve el problema.
 
 ### Variables de entorno MP
 ```env
-MP_ACCESS_TOKEN=APP_USR-...       # credencial del seller (test o producción)
-MP_PUBLIC_KEY=APP_USR-...         # clave pública (usada en frontend si se necesita)
-NGROK_URL=https://xxx.ngrok-free.dev  # solo para webhook en dev (vacío en producción)
+MP_ACCESS_TOKEN=APP_USR-...        # credencial del seller (test o producción)
+MP_PUBLIC_KEY=APP_USR-...          # clave pública
+MP_WEBHOOK_SECRET=...              # secret para validar firma x-signature (vacío = validación desactivada)
+NGROK_URL=https://xxx.ngrok-free.dev   # solo para webhook en dev (vacío en producción)
 FRONTEND_BASE_URL=http://localhost:3000  # usado para back_urls de MP
 ```
 - `auto_return: "approved"` se activa automáticamente si `FRONTEND_BASE_URL` empieza con `https://`
@@ -175,23 +241,24 @@ FRONTEND_BASE_URL=http://localhost:3000  # usado para back_urls de MP
 
 ---
 
-## Estado actual de autenticación JWT
+## Schedulers automáticos (bookings-api)
 
-| Servicio        | Estado                                                           |
-|-----------------|------------------------------------------------------------------|
-| users-api       | ✅ Genera y firma JWT (HS256) con `user_id`, `email`, `is_admin` |
-| frontend        | ⚠️ Verifica presencia del token, no la firma                    |
-| bookings-api    | ❌ `isAdmin` se determina por presencia de `user_id` en el body  |
-| apartments-api  | ❌ Sin ninguna validación                                        |
+| Scheduler | Frecuencia | Función |
+|-----------|-----------|---------|
+| `runDailyScheduler` | Diario a las 00:05 UTC | `MarkExpiredBookingsAsCompleted` — cierra reservas con checkout pasado |
+| `runPendingPaymentScheduler` | Cada 5 minutos | `CancelExpiredPendingBookings` — cancela reservas en `pendiente_pago` con más de 30 min |
 
-**Bug de seguridad conocido** (`bookings_controller.go:42`):
-```go
-// Cualquiera puede enviar user_id en el body y obtener privilegios admin
-if req.UserID != nil {
-    isAdmin = true
-}
-```
-Para implementar JWT real: crear middleware `AdminRequired(jwtSecret)` que valide el token del header `Authorization: Bearer <token>` y extraiga `is_admin` de los claims.
+Endpoint manual: `POST /api/v1/bookings/mark-expired-as-completed`
+
+---
+
+## Emails con Resend
+
+- **Restricción free tier:** solo se puede enviar a `augusto.buhler03@gmail.com` sin verificar dominio.
+- **Para producción:** verificar dominio en resend.com/domains y cambiar `FROM_EMAIL`.
+- Templates en `notifications-api/clients/email_client.go`:
+  - `buildConfirmationHTML` — datos del huésped, fechas, total, seña (30%), saldo al ingreso, comprobante MP, Google Maps
+  - `buildCancellationHTML` — alerta al admin con datos de la reserva cancelada y plazo de devolución (48hs)
 
 ---
 
@@ -207,20 +274,26 @@ Al agregar métodos a las interfaces, agregar el mock correspondiente en `bookin
 
 ---
 
-## Scheduler automático
+## Diseño del frontend
 
-`bookings-api/main.go` lanza `runDailyScheduler` (goroutine) que a las 00:05 UTC
-llama a `MarkExpiredBookingsAsCompleted`. Endpoint manual:
-`POST /api/v1/bookings/mark-expired-as-completed`.
+**Stack visual:** Tailwind CSS + Framer Motion. Fuentes: Space Grotesk (display) + Instrument Sans (body) vía Google Fonts.
 
----
+**Design tokens (tailwind.config.js):**
+```
+primary-600: #b0532e  (acento rust/óxido — CTAs, kickers)
+paper:       #f7f5f2  (fondo principal cálido)
+ink:         #2b2b28  (texto principal)
+ink-soft:    #55524b  (texto secundario)
+muted:       #8a857c  (metadata, captions)
+hairline:    #ddd8cf  (todos los bordes)
+```
 
-## Emails con Resend
-
-- **Restricción free tier:** solo se puede enviar a `augusto.buhler03@gmail.com` sin verificar dominio.
-- **Para producción:** verificar dominio en resend.com/domains y cambiar `FROM_EMAIL`.
-- El template HTML está en `notifications-api/clients/email_client.go` → `buildConfirmationHTML`.
-- Muestra: datos del huésped, fechas, total, seña pagada (30%), comprobante MP, saldo al ingreso, botón Google Maps.
+**Principios de diseño:**
+- Sin sombras — hairlines en lugar de `shadow-*`
+- Botones e inputs: `border-radius: 999px` (pills)
+- Cards e imágenes: `border-radius: 4px`
+- Animaciones: Framer Motion con `duration: 150ms`, `hover: translateY(-1px)` en CTAs
+- Cards con cascade stagger (45ms por card) en la grilla de búsqueda
 
 ---
 
@@ -230,7 +303,8 @@ llama a `MarkExpiredBookingsAsCompleted`. Endpoint manual:
 - Interfaces para inyección de dependencias (facilita mocks en tests)
 - Errores de negocio como `errors.New("mensaje")` desde el service; el controller mapea al HTTP status correcto
 - No usar `500` para errores de negocio esperados
-- Frontend: URLs hardcodeadas a `http://localhost:<puerto>` en dev (no usar variables VITE_*) — funciona sin Docker y sin env vars
+- Frontend: URLs hardcodeadas a `http://localhost:<puerto>` en dev — funciona sin Docker y sin env vars
+- `searchApartments` siempre agrega `_t: Date.now()` para evitar caché del browser
 
 ---
 
@@ -238,13 +312,15 @@ llama a `MarkExpiredBookingsAsCompleted`. Endpoint manual:
 
 | Prioridad | Item |
 |-----------|------|
-| 🔴 Crítico | Implementar validación JWT en bookings-api y apartments-api |
-| 🔴 Crítico | Rotar todos los secretos (JWT_SECRET, MP tokens, contraseñas BD) |
-| 🔴 Crítico | HTTPS + cerrar CORS (hoy abierto a `*`) |
+| 🔴 Crítico | Rotar JWT_SECRET (actualmente `"your-secret-key-change-in-production"` en docker-compose) |
+| 🔴 Crítico | Rotar contraseñas BD (`root/root` en MySQL y MongoDB) |
+| 🔴 Crítico | HTTPS + cerrar CORS (hoy abierto a `*` en los 4 servicios Go) |
+| 🔴 Crítico | `isAdmin()` en frontend solo verifica localStorage — cualquiera puede inyectar `user_type: "admin"` en devtools |
+| 🔴 Crítico | `MP_WEBHOOK_SECRET` vacío en docker-compose — validación de firma x-signature desactivada |
+| 🟡 Importante | Cambiar credenciales MP de sandbox a producción |
 | 🟡 Importante | Verificar dominio en Resend para enviar emails a cualquier destinatario |
-| 🟡 Importante | Cambiar credenciales MP a producción (hoy en sandbox) |
-| 🟡 Importante | Validar firma `x-signature` del webhook real de MP |
-| 🟢 Recomendado | Rate limiting en endpoints públicos (especialmente `POST /bookings`) |
+| 🟡 Importante | Implementar paginación real en admin (hoy usa `size=1000` y `size=100` como workaround) |
+| 🟢 Recomendado | Rate limiting en endpoints públicos (`POST /bookings`, `GET /search`) |
 | 🟢 Recomendado | Circuit breaker entre servicios (si apartments-api cae, bookings-api falla) |
 | 🟢 Recomendado | Observabilidad centralizada (Prometheus + Grafana + Loki) |
 
@@ -252,16 +328,16 @@ llama a `MarkExpiredBookingsAsCompleted`. Endpoint manual:
 
 ## Deuda técnica conocida
 
-- Sin invalidación de caché en search-api por eventos de reservas (solo por eventos de apartamentos)
-- `ProtectedRoute` del frontend verifica presencia del token pero no su firma ni expiración
-- Sin paginación en `GET /api/v1/bookings` (puede ser lento con muchas reservas)
-- `notifications-api` no tiene retry si el email falla (el evento se pierde)
+- `ProtectedRoute` del frontend solo verifica `user_type` en localStorage, no valida firma ni expiración del JWT
+- Sin paginación real en admin (workaround con size=1000 / size=100)
+- Retry tracker de notifications-api en memoria (`sync.Map`) — se pierde si el contenedor se reinicia, puede reenviar emails duplicados
+- Search-api no invalida caché cuando se crea/cancela una reserva (solo por eventos de apartamentos). Búsquedas sin fechas pueden mostrar datos de capacidad desactualizados hasta 5 min. Búsquedas con fechas ya filtran correctamente vía bookings-api.
 
 ---
 
 ## Archivos de referencia adicional
 
-- [docs/adr/](docs/adr/) — 4 Architecture Decision Records (MongoDB, fechas UTC, cache-aside, sin circuit breaker)
+- [docs/adr/](docs/adr/) — Architecture Decision Records
 - `.env.example` — todas las variables de entorno con descripción
 - `requests.http` en cada microservicio — pruebas manuales con VS Code REST Client
 - [VERIFICAR_SISTEMA.sh](VERIFICAR_SISTEMA.sh) — smoke checks del sistema completo

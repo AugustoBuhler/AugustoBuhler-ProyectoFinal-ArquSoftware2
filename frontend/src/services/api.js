@@ -50,7 +50,7 @@ const bookingsAPI = axios.create({
 
 export const searchApartments = async (params = {}) => {
   try {
-    const response = await searchAPI.get('/search', { params })
+    const response = await searchAPI.get('/search', { params: { ...params, _t: Date.now() } })
     return response.data
   } catch (error) {
     console.error('Error searching apartments:', error)
@@ -65,6 +65,19 @@ export const getApartmentById = async (id) => {
   } catch (error) {
     console.error('Error fetching apartment:', error)
     throw error
+  }
+}
+
+// Retorna true si hay disponibilidad, false si no hay, null si hubo error
+export const checkTypeAvailability = async (type, checkIn, checkOut) => {
+  try {
+    await apartmentsAPI.get('/apartments/available-by-type', {
+      params: { type, check_in: checkIn, check_out: checkOut },
+    })
+    return true
+  } catch (error) {
+    if (error.response?.status === 404) return false
+    return null // error de red → no mostrar nada
   }
 }
 
@@ -109,11 +122,21 @@ export const createCheckout = async (bookingId) => {
 }
 
 export const triggerPaymentWebhook = async (paymentId) => {
-  await bookingsAPI.post('/payments/webhook', { type: 'payment', data: { id: String(paymentId) } })
+  await bookingsAPI.post('/payments/confirm', { payment_id: String(paymentId) })
 }
 
 export const verifyPayment = async (bookingId) => {
   const response = await bookingsAPI.post(`/bookings/${bookingId}/verify-payment`)
+  return response.data
+}
+
+export const cancelBookingAsGuest = async (bookingId, reason = '') => {
+  const response = await bookingsAPI.post(`/bookings/${bookingId}/cancel-guest`, { reason })
+  return response.data
+}
+
+export const getBookingsByContact = async (dni, email) => {
+  const response = await bookingsAPI.get('/bookings/by-contact', { params: { dni, email } })
   return response.data
 }
 
